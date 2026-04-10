@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { MagnifyingGlass, Lightning } from '@phosphor-icons/react';
@@ -22,6 +23,7 @@ const CATEGORIES = [
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export default function Marketplace() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState('');
@@ -50,8 +52,14 @@ export default function Marketplace() {
       .finally(() => setLoading(false));
   }, [category, search, sort]);
 
+  const handleLogin = () => {
+    const redirectUrl = window.location.origin + '/marketplace';
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
   const handleAddToGarage = async (e, productId) => {
     e.stopPropagation();
+    if (!user) { handleLogin(); return; }
     const primaryCar = cars.find(c => c.is_primary) || cars[0];
     if (!primaryCar) {
       toast.error('Please set up your car profile first');

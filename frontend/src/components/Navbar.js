@@ -18,10 +18,17 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { href: '/marketplace', label: 'Marketplace' },
-    { href: '/garage', label: 'My Garage' },
-    { href: '/community', label: 'Community' },
+    { href: '/marketplace', label: 'Marketplace', authRequired: false },
+    { href: '/garage', label: 'My Garage', authRequired: true },
+    { href: '/community', label: 'Community', authRequired: false },
   ];
+
+  const handleNavClick = (e, link) => {
+    if (link.authRequired && !user) {
+      e.preventDefault();
+      handleLogin();
+    }
+  };
 
   return (
     <nav
@@ -38,18 +45,19 @@ export default function Navbar() {
 
       {/* Desktop nav links */}
       <div className="hidden md:flex items-center space-x-12 font-headline uppercase tracking-wider text-sm">
-        {navLinks.map(({ href, label }) => (
+        {navLinks.map((link) => (
           <Link
-            key={href}
-            to={href}
+            key={link.href}
+            to={link.href}
+            onClick={(e) => handleNavClick(e, link)}
             className={`transition-colors duration-300 ${
-              location.pathname === href
+              location.pathname === link.href
                 ? 'text-mg-orange border-b-2 border-mg-red pb-1'
                 : 'text-neutral-400 hover:text-mg-orange'
             }`}
-            data-testid={`nav-${label.toLowerCase().replace(/\s/g, '-')}`}
+            data-testid={`nav-${link.label.toLowerCase().replace(/\s/g, '-')}`}
           >
-            {label}
+            {link.label}
           </Link>
         ))}
       </div>
@@ -108,16 +116,16 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="absolute top-20 left-0 right-0 bg-neutral-950/95 backdrop-blur-xl border-b border-neutral-800 md:hidden">
           <div className="flex flex-col py-4 px-8 gap-4">
-            {navLinks.map(({ href, label }) => (
+            {navLinks.map((link) => (
               <Link
-                key={href}
-                to={href}
-                onClick={() => setMobileOpen(false)}
+                key={link.href}
+                to={link.href}
+                onClick={(e) => { handleNavClick(e, link); setMobileOpen(false); }}
                 className={`font-headline uppercase tracking-wider text-sm py-2 transition-colors ${
-                  location.pathname === href ? 'text-mg-orange' : 'text-neutral-400 hover:text-mg-orange'
+                  location.pathname === link.href ? 'text-mg-orange' : 'text-neutral-400 hover:text-mg-orange'
                 }`}
               >
-                {label}
+                {link.label}
               </Link>
             ))}
             {!user && (
