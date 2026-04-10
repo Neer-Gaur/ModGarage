@@ -45,14 +45,23 @@ class BookingCreate(BaseModel):
     slot_id: str
     pickup_address: str
 
+class ChannelCreate(BaseModel):
+    name: str
+    description: str = ""
+
 class PostCreate(BaseModel):
     caption: str
     media_urls: List[str] = []
     tagged_products: List[str] = []
     car_id: Optional[str] = None
+    channel_id: Optional[str] = None
+
+class VoteCreate(BaseModel):
+    vote: str  # "up" or "down"
 
 class CommentCreate(BaseModel):
     content: str
+    parent_comment_id: Optional[str] = None
 
 class SlotCreate(BaseModel):
     date: str
@@ -361,10 +370,54 @@ async def cancel_booking(booking_id: str, request: Request):
     await db.booking_slots.update_one({"slot_id": booking["slot_id"]}, {"$inc": {"booked_count": -1}})
     return {"message": "Booking cancelled"}
 
+# ========== CHANNEL ROUTES ==========
+@api_router.get("/channels")
+async def get_channels():
+    channels = await db.channels.find({}, {"_id": 0}).sort("member_count", -1).to_list(100)
+    return channels
+
+@api_router.post("/channels")
+async def create_channel(channel: ChannelCreate, request: Request):
+    user = await get_current_user(request)
+    slug = channel.name.lower().replace(" ", "-").replace("&", "and")
+    existing = await db.channels.find_one({"slug": slug})
+    if existing:
+        raise HTTPException(status_code=400, detail="Channel with this name already exists")
+    doc = {
+        "channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": channel.name, "slug": slug,
+        "description": channel.description, "created_by": user["user_id"],
+        "member_count": 1, "post_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.channels.insert_one(doc)
+    return await db.channels.find_one({"channel_id": doc["channel_id"]}, {"_id": 0})
+
+@api_router.post("/channels/{channel_id}/join")
+async def join_channel(channel_id: str, request: Request):
+    user = await get_current_user(request)
+    existing = await db.channel_members.find_one({"channel_id": channel_id, "user_id": user["user_id"]})
+    if existing:
+        await db.channel_members.delete_one({"channel_id": channel_id, "user_id": user["user_id"]})
+        await db.channels.update_one({"channel_id": channel_id}, {"$inc": {"member_count": -1}})
+        return {"joined": False}
+    await db.channel_members.insert_one({"channel_id": channel_id, "user_id": user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.channels.update_one({"channel_id": channel_id}, {"$inc": {"member_count": 1}})
+    return {"joined": True}
+
 # ========== COMMUNITY ROUTES ==========
 @api_router.get("/posts")
-async def get_posts(skip: int = 0, limit: int = 20):
-    posts = await db.posts.find({"is_published": True}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+async def get_posts(skip: int = 0, limit: int = 20, channel: Optional[str] = None, sort_by: Optional[str] = "new"):
+    query = {"is_published": True}
+    if channel:
+        ch = await db.channels.find_one({"slug": channel})
+        if ch:
+            query["channel_id"] = ch["channel_id"]
+    sort_field = "created_at"
+    if sort_by == "top":
+        sort_field = "vote_count"
+    elif sort_by == "hot":
+        sort_field = "vote_count"
+    posts = await db.posts.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(limit).to_list(limit)
     for post in posts:
         user = await db.users.find_one({"user_id": post["user_id"]}, {"_id": 0})
         post["author"] = {"name": user["name"], "picture": user.get("picture", ""), "user_id": user["user_id"]} if user else {"name": "Unknown", "picture": "", "user_id": ""}
@@ -375,6 +428,9 @@ async def get_posts(skip: int = 0, limit: int = 20):
                 if p:
                     tagged.append({"product_id": p["product_id"], "name": p["name"], "price": p["price"], "slug": p["slug"]})
             post["tagged_product_details"] = tagged
+        if post.get("channel_id"):
+            ch = await db.channels.find_one({"channel_id": post["channel_id"]}, {"_id": 0})
+            post["channel"] = ch
     return posts
 
 @api_router.post("/posts")
@@ -382,13 +438,55 @@ async def create_post(post: PostCreate, request: Request):
     user = await get_current_user(request)
     doc = {
         "post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": user["user_id"],
-        "car_id": post.car_id, "caption": post.caption,
+        "car_id": post.car_id, "caption": post.caption, "channel_id": post.channel_id,
         "media_urls": post.media_urls, "tagged_products": post.tagged_products,
-        "likes_count": 0, "comments_count": 0, "is_published": True,
+        "likes_count": 0, "comments_count": 0,
+        "upvotes": 0, "downvotes": 0, "vote_count": 0,
+        "is_published": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.posts.insert_one(doc)
+    if post.channel_id:
+        await db.channels.update_one({"channel_id": post.channel_id}, {"$inc": {"post_count": 1}})
     return await db.posts.find_one({"post_id": doc["post_id"]}, {"_id": 0})
+
+@api_router.post("/posts/{post_id}/vote")
+async def vote_post(post_id: str, vote: VoteCreate, request: Request):
+    user = await get_current_user(request)
+    if vote.vote not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="Vote must be 'up' or 'down'")
+    existing = await db.post_votes.find_one({"post_id": post_id, "user_id": user["user_id"]})
+    if existing:
+        old_vote = existing["vote"]
+        if old_vote == vote.vote:
+            # Remove vote
+            await db.post_votes.delete_one({"post_id": post_id, "user_id": user["user_id"]})
+            inc = {"upvotes": -1, "vote_count": -1} if old_vote == "up" else {"downvotes": -1, "vote_count": 1}
+            await db.posts.update_one({"post_id": post_id}, {"$inc": inc})
+            return {"vote": None}
+        else:
+            # Change vote
+            await db.post_votes.update_one({"post_id": post_id, "user_id": user["user_id"]}, {"$set": {"vote": vote.vote}})
+            if vote.vote == "up":
+                await db.posts.update_one({"post_id": post_id}, {"$inc": {"upvotes": 1, "downvotes": -1, "vote_count": 2}})
+            else:
+                await db.posts.update_one({"post_id": post_id}, {"$inc": {"upvotes": -1, "downvotes": 1, "vote_count": -2}})
+            return {"vote": vote.vote}
+    else:
+        await db.post_votes.insert_one({"post_id": post_id, "user_id": user["user_id"], "vote": vote.vote, "created_at": datetime.now(timezone.utc).isoformat()})
+        inc = {"upvotes": 1, "vote_count": 1} if vote.vote == "up" else {"downvotes": 1, "vote_count": -1}
+        await db.posts.update_one({"post_id": post_id}, {"$inc": inc})
+        return {"vote": vote.vote}
+
+@api_router.post("/posts/{post_id}/save")
+async def save_post(post_id: str, request: Request):
+    user = await get_current_user(request)
+    existing = await db.saved_posts.find_one({"post_id": post_id, "user_id": user["user_id"]})
+    if existing:
+        await db.saved_posts.delete_one({"post_id": post_id, "user_id": user["user_id"]})
+        return {"saved": False}
+    await db.saved_posts.insert_one({"post_id": post_id, "user_id": user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"saved": True}
 
 @api_router.post("/posts/{post_id}/like")
 async def toggle_like(post_id: str, request: Request):
@@ -417,6 +515,7 @@ async def add_comment(post_id: str, comment: CommentCreate, request: Request):
     doc = {
         "comment_id": f"cmt_{uuid.uuid4().hex[:12]}", "post_id": post_id,
         "user_id": user["user_id"], "content": comment.content,
+        "parent_comment_id": comment.parent_comment_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.post_comments.insert_one(doc)
@@ -525,6 +624,22 @@ async def seed_database():
         await db.booking_slots.insert_many(slots)
         logger.info(f"Seeded {len(slots)} booking slots")
 
+    # Seed channels
+    channel_count = await db.channels.count_documents({})
+    if channel_count == 0:
+        channels = [
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Mahindra Thar Club", "slug": "mahindra-thar-club", "description": "All things Thar — lifts, bumpers, winches and trail stories.", "created_by": "system", "member_count": 342, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Toyota Supra Builds", "slug": "toyota-supra-builds", "description": "MK4 and MK5 Supra build diaries, dyno results and tuning tips.", "created_by": "system", "member_count": 518, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "BMW M Series", "slug": "bmw-m-series", "description": "M2, M3, M4 and beyond. Performance mods and track setups.", "created_by": "system", "member_count": 672, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "JDM Legends", "slug": "jdm-legends", "description": "Skyline, RX-7, NSX, EVO — the icons of Japanese performance.", "created_by": "system", "member_count": 891, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Mustang Nation", "slug": "mustang-nation", "description": "From classic 5.0 to modern GT500. American muscle at its finest.", "created_by": "system", "member_count": 423, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Off-Road Warriors", "slug": "off-road-warriors", "description": "Jeeps, trucks, 4x4s — mud, rocks and everything in between.", "created_by": "system", "member_count": 287, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Track Day Diaries", "slug": "track-day-diaries", "description": "Lap times, suspension setups, and aero data from the circuit.", "created_by": "system", "member_count": 156, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Show and Shine", "slug": "show-and-shine", "description": "Detailing, wraps, paint correction — make it look as good as it drives.", "created_by": "system", "member_count": 734, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.channels.insert_many(channels)
+        logger.info(f"Seeded {len(channels)} community channels")
+
     # Seed community posts (from a system user)
     post_count = await db.posts.count_documents({})
     if post_count == 0:
@@ -539,16 +654,21 @@ async def seed_database():
         else:
             system_user_id = system_user["user_id"]
 
+        all_channels = await db.channels.find({}, {"_id": 0}).to_list(10)
+        ch_map = {c["slug"]: c["channel_id"] for c in all_channels}
         products = await db.products.find({}, {"_id": 0}).to_list(5)
         tagged_ids = [p["product_id"] for p in products[:3]] if products else []
         posts = [
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "caption": "Fresh build complete! Full carbon aero kit with titanium exhaust. The sound is absolutely insane.", "media_urls": [IMG_CAR1], "tagged_products": tagged_ids[:2], "likes_count": 47, "comments_count": 12, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "caption": "Weekend project turned masterpiece. KW V3 coilovers + BBS RS wheels. Sits perfect.", "media_urls": [IMG_CAR2], "tagged_products": tagged_ids[1:3] if len(tagged_ids) > 1 else [], "likes_count": 83, "comments_count": 24, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "caption": "Engine bay goals. Every bolt, every hose - perfection. Who else obsesses over the details?", "media_urls": [IMG_ENGINE], "tagged_products": tagged_ids[:1], "likes_count": 156, "comments_count": 38, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "caption": "Track day ready. Full suspension overhaul and aero package installed. Shaved 3 seconds off our lap time!", "media_urls": [IMG_GARAGE], "tagged_products": tagged_ids, "likes_count": 210, "comments_count": 52, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("show-and-shine"), "caption": "Fresh build complete! Full carbon aero kit with titanium exhaust. The sound is absolutely insane.", "media_urls": [IMG_CAR1], "tagged_products": tagged_ids[:2], "likes_count": 47, "comments_count": 12, "upvotes": 47, "downvotes": 3, "vote_count": 44, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("bmw-m-series"), "caption": "Weekend project turned masterpiece. KW V3 coilovers + BBS RS wheels. Sits perfect.", "media_urls": [IMG_CAR2], "tagged_products": tagged_ids[1:3] if len(tagged_ids) > 1 else [], "likes_count": 83, "comments_count": 24, "upvotes": 83, "downvotes": 5, "vote_count": 78, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("jdm-legends"), "caption": "Engine bay goals. Every bolt, every hose - perfection. Who else obsesses over the details?", "media_urls": [IMG_ENGINE], "tagged_products": tagged_ids[:1], "likes_count": 156, "comments_count": 38, "upvotes": 156, "downvotes": 8, "vote_count": 148, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("track-day-diaries"), "caption": "Track day ready. Full suspension overhaul and aero package installed. Shaved 3 seconds off our lap time!", "media_urls": [IMG_GARAGE], "tagged_products": tagged_ids, "likes_count": 210, "comments_count": 52, "upvotes": 210, "downvotes": 12, "vote_count": 198, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
         ]
         await db.posts.insert_many(posts)
-        logger.info("Seeded community posts")
+        for ch_id in set(p["channel_id"] for p in posts if p.get("channel_id")):
+            count = sum(1 for p in posts if p.get("channel_id") == ch_id)
+            await db.channels.update_one({"channel_id": ch_id}, {"$inc": {"post_count": count}})
+        logger.info("Seeded community posts with channels")
 
 @app.on_event("startup")
 async def startup():
