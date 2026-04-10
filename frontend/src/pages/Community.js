@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Heart, ChatCircle, PaperPlaneTilt, Plus, Tag } from '@phosphor-icons/react';
+import { Heart, ChatCircle, ShareNetwork, Plus, ArrowRight, DotsThreeVertical } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export default function Community() {
   const { user } = useAuth();
@@ -57,6 +56,7 @@ export default function Community() {
   };
 
   const loadComments = async (postId) => {
+    if (activeComments === postId) { setActiveComments(null); return; }
     setActiveComments(postId);
     try {
       const r = await axios.get(`${API}/posts/${postId}/comments`);
@@ -75,150 +75,231 @@ export default function Community() {
   };
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="community-page">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-end justify-between mb-8">
-          <div>
-            <p className="font-mono text-xs tracking-[0.3em] text-mg-red uppercase mb-3">Social</p>
-            <h1 className="font-unbounded text-3xl md:text-4xl font-bold tracking-tight uppercase text-white">Community</h1>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <button className="bg-mg-red text-white font-mono text-xs tracking-wider uppercase px-4 py-2.5 hover:bg-[#E62600] transition-colors flex items-center gap-2" data-testid="create-post-btn">
-                <Plus size={14} weight="bold" /> Post
-              </button>
-            </DialogTrigger>
-            <DialogContent className="bg-mg-surface border-white/10 max-w-md">
-              <DialogHeader>
-                <DialogTitle className="font-unbounded text-sm font-bold uppercase tracking-wider text-white">New Post</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <textarea
-                  value={newPost.caption}
-                  onChange={e => setNewPost(p => ({ ...p, caption: e.target.value }))}
-                  placeholder="Share your build..."
-                  rows={3}
-                  className="w-full bg-[#0A0A0A] border border-white/10 px-4 py-3 text-white font-manrope text-sm focus:border-mg-red focus:outline-none transition-colors resize-none"
-                  data-testid="post-caption-input"
-                />
-                <input
-                  value={newPost.media_url}
-                  onChange={e => setNewPost(p => ({ ...p, media_url: e.target.value }))}
-                  placeholder="Image URL (optional)"
-                  className="w-full bg-[#0A0A0A] border border-white/10 px-4 py-3 text-white font-manrope text-sm focus:border-mg-red focus:outline-none transition-colors"
-                  data-testid="post-media-input"
-                />
-                <button
-                  onClick={handleCreatePost}
-                  className="w-full bg-mg-red text-white font-unbounded text-xs tracking-widest uppercase py-3 hover:bg-[#E62600] transition-colors"
-                  data-testid="submit-post-btn"
-                >
-                  Publish
-                </button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <div className="min-h-screen bg-mg-surface" data-testid="community-page">
+      <main className="pt-32 pb-24 max-w-5xl mx-auto px-4 md:px-8 lg:px-12">
+        {/* Header */}
+        <header className="mb-16">
+          <h1 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-mg-text mb-4">
+            The <span className="text-mg-red">Feed</span>
+          </h1>
+          <p className="font-body text-neutral-400 text-lg max-w-xl border-l-4 border-mg-red pl-6">
+            Engineered for inspiration. Browse the latest high-performance builds from the ModGarage community.
+          </p>
+        </header>
 
         {/* Feed */}
         {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => <div key={i} className="bg-mg-surface h-96 animate-pulse" />)}
+          <div className="flex flex-col gap-24">
+            {[1, 2].map(i => (
+              <div key={i} className="bg-mg-surface-dim">
+                <div className="p-6 bg-mg-surface-card"><div className="h-12 bg-mg-surface-bright animate-pulse w-48" /></div>
+                <div className="aspect-video bg-mg-surface-bright animate-pulse" />
+                <div className="p-8"><div className="h-6 bg-mg-surface-bright animate-pulse w-3/4" /></div>
+              </div>
+            ))}
           </div>
         ) : posts.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-white/30 font-manrope">No posts yet. Be the first to share!</p>
+            <p className="text-neutral-500 font-body mb-4">No posts yet. Be the first to share your build!</p>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <button className="bg-mg-red text-white px-6 py-3 font-headline font-bold uppercase tracking-widest" data-testid="create-post-btn">
+                  Share Your Build
+                </button>
+              </DialogTrigger>
+              <DialogContent className="bg-mg-surface-card border-white/10 max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="font-headline text-sm font-bold uppercase tracking-wider text-mg-text">New Post</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <textarea
+                    value={newPost.caption}
+                    onChange={e => setNewPost(p => ({ ...p, caption: e.target.value }))}
+                    placeholder="Share your build..."
+                    rows={3}
+                    className="w-full bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm focus:border-mg-red focus:outline-none transition-colors resize-none"
+                    data-testid="post-caption-input"
+                  />
+                  <input
+                    value={newPost.media_url}
+                    onChange={e => setNewPost(p => ({ ...p, media_url: e.target.value }))}
+                    placeholder="Image URL (optional)"
+                    className="w-full bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm focus:border-mg-red focus:outline-none transition-colors"
+                    data-testid="post-media-input"
+                  />
+                  <button
+                    onClick={handleCreatePost}
+                    className="w-full bg-mg-red text-white font-headline text-xs tracking-widest uppercase py-3 hover:brightness-110 transition-colors"
+                    data-testid="submit-post-btn"
+                  >
+                    Publish
+                  </button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         ) : (
-          <div className="space-y-[1px] bg-white/5">
+          <div className="flex flex-col gap-24">
             {posts.map(post => (
-              <div key={post.post_id} className="bg-mg-dark" data-testid={`post-${post.post_id}`}>
+              <article key={post.post_id} className="group relative bg-mg-surface-dim" data-testid={`post-${post.post_id}`}>
                 {/* Post Header */}
-                <div className="px-4 py-3 flex items-center gap-3">
-                  {post.author?.picture ? (
-                    <img src={post.author.picture} alt="" className="w-8 h-8 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-8 h-8 bg-mg-surface flex items-center justify-center font-mono text-xs text-white/40">
-                      {post.author?.name?.[0] || '?'}
+                <div className="flex items-center justify-between p-6 bg-mg-surface-card">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-mg-surface-bright overflow-hidden">
+                      {post.author?.picture ? (
+                        <img src={post.author.picture} alt="" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-mg-text font-headline font-bold">
+                          {post.author?.name?.[0] || '?'}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <span className="font-manrope text-sm font-semibold text-white">{post.author?.name}</span>
+                    <div>
+                      <p className="font-headline font-bold uppercase tracking-wider text-mg-text">{post.author?.name || 'Anonymous'}</p>
+                      <p className="text-xs font-label uppercase tracking-widest text-mg-cyan">Community Member</p>
+                    </div>
+                  </div>
+                  <DotsThreeVertical size={20} className="text-neutral-500 cursor-pointer hover:text-mg-orange transition-colors" />
                 </div>
 
                 {/* Post Image */}
                 {post.media_urls?.[0] && (
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    <img src={post.media_urls[0]} alt="" className="w-full h-full object-cover" />
-                    {/* Hotspots for tagged products */}
-                    {post.tagged_product_details?.map((tp, idx) => (
-                      <div
-                        key={tp.product_id}
-                        className="absolute group cursor-pointer"
-                        style={{ top: `${30 + idx * 20}%`, left: `${20 + idx * 25}%` }}
-                        onClick={() => navigate(`/product/${tp.slug}`)}
-                      >
-                        <div className="w-6 h-6 bg-mg-red/80 rounded-full flex items-center justify-center hotspot-pulse">
-                          <Tag size={12} weight="bold" className="text-white" />
-                        </div>
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                          <div className="bg-mg-dark/95 backdrop-blur-sm border border-white/10 px-3 py-2 whitespace-nowrap">
-                            <p className="font-manrope text-xs text-white font-semibold">{tp.name}</p>
-                            <p className="font-mono text-[10px] text-mg-red">{formatINR(tp.price)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="relative aspect-video overflow-hidden">
+                    <img
+                      src={post.media_urls[0]}
+                      alt=""
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      loading="lazy"
+                    />
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="px-4 py-3 flex items-center gap-6">
-                  <button onClick={() => handleLike(post.post_id)} className="flex items-center gap-2 text-white/40 hover:text-mg-red transition-colors" data-testid={`like-${post.post_id}`}>
-                    <Heart size={20} weight="bold" /> <span className="font-mono text-xs">{post.likes_count}</span>
-                  </button>
-                  <button onClick={() => loadComments(post.post_id)} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors" data-testid={`comment-toggle-${post.post_id}`}>
-                    <ChatCircle size={20} weight="bold" /> <span className="font-mono text-xs">{post.comments_count}</span>
-                  </button>
+                {/* Content Grid */}
+                <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="md:col-span-2">
+                    <p className="font-body text-lg text-mg-text mb-6 leading-relaxed">{post.caption}</p>
+                    <div className="flex items-center space-x-8">
+                      <button
+                        onClick={() => handleLike(post.post_id)}
+                        className="flex items-center space-x-2 text-mg-orange hover:text-mg-red transition-colors"
+                        data-testid={`like-${post.post_id}`}
+                      >
+                        <Heart size={20} weight="fill" />
+                        <span className="font-headline font-bold">{post.likes_count}</span>
+                      </button>
+                      <button
+                        onClick={() => loadComments(post.post_id)}
+                        className="flex items-center space-x-2 text-neutral-400 hover:text-mg-text transition-colors"
+                        data-testid={`comment-toggle-${post.post_id}`}
+                      >
+                        <ChatCircle size={20} />
+                        <span className="font-headline font-bold">{post.comments_count}</span>
+                      </button>
+                      <button className="flex items-center space-x-2 text-neutral-400 hover:text-mg-text transition-colors">
+                        <ShareNetwork size={20} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tagged Products */}
+                  {post.tagged_product_details?.length > 0 && (
+                    <div className="bg-mg-surface-card p-6">
+                      <h4 className="text-xs font-label uppercase tracking-widest text-mg-red mb-4 font-bold">Tagged Parts</h4>
+                      <ul className="space-y-3">
+                        {post.tagged_product_details.map(tp => (
+                          <li
+                            key={tp.product_id}
+                            onClick={() => navigate(`/product/${tp.slug}`)}
+                            className="flex items-center justify-between group/part cursor-pointer"
+                          >
+                            <span className="text-sm font-headline text-neutral-400 group-hover/part:text-mg-text transition-colors">{tp.name}</span>
+                            <ArrowRight size={12} className="text-white/20 group-hover/part:text-mg-cyan transition-colors" />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
-                {/* Caption */}
-                <div className="px-4 pb-3">
-                  <p className="text-white/70 font-manrope text-sm"><span className="font-semibold text-white mr-2">{post.author?.name}</span>{post.caption}</p>
-                </div>
-
-                {/* Comments */}
+                {/* Comments Section */}
                 {activeComments === post.post_id && (
-                  <div className="px-4 pb-4 border-t border-white/5 pt-3">
+                  <div className="px-8 pb-8 border-t border-white/5 pt-6">
                     {comments.map(c => (
-                      <div key={c.comment_id} className="mb-2">
-                        <span className="font-manrope text-xs font-semibold text-white mr-2">{c.author?.name}</span>
-                        <span className="font-manrope text-xs text-white/60">{c.content}</span>
+                      <div key={c.comment_id} className="mb-3 flex items-start gap-3">
+                        <div className="w-8 h-8 bg-mg-surface-bright shrink-0 flex items-center justify-center text-xs font-headline text-mg-text">
+                          {c.author?.name?.[0] || '?'}
+                        </div>
+                        <div>
+                          <span className="font-headline text-xs font-bold text-mg-text mr-2">{c.author?.name}</span>
+                          <span className="font-body text-xs text-neutral-400">{c.content}</span>
+                        </div>
                       </div>
                     ))}
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-4">
                       <input
                         value={commentText}
                         onChange={e => setCommentText(e.target.value)}
                         placeholder="Add a comment..."
-                        className="flex-1 bg-[#0A0A0A] border border-white/10 px-3 py-2 text-white font-manrope text-xs focus:border-mg-red focus:outline-none"
+                        className="flex-1 bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-xs focus:border-mg-red focus:outline-none"
                         onKeyDown={e => e.key === 'Enter' && handleComment(post.post_id)}
                         data-testid={`comment-input-${post.post_id}`}
                       />
                       <button
                         onClick={() => handleComment(post.post_id)}
-                        className="bg-mg-red text-white px-3 py-2"
+                        className="bg-mg-red text-white px-4 py-3 font-headline font-bold text-xs uppercase tracking-widest"
                         data-testid={`comment-submit-${post.post_id}`}
                       >
-                        <PaperPlaneTilt size={14} weight="bold" />
+                        Post
                       </button>
                     </div>
                   </div>
                 )}
-              </div>
+              </article>
             ))}
           </div>
         )}
-      </div>
+      </main>
+
+      {/* Floating Action Button */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogTrigger asChild>
+          <button
+            className="fixed bottom-12 right-12 w-16 h-16 bg-mg-red text-white shadow-[0_0_30px_rgba(250,93,0,0.4)] flex items-center justify-center group active:scale-90 transition-all z-50"
+            data-testid="create-post-btn"
+          >
+            <Plus size={28} weight="bold" className="group-hover:rotate-90 transition-transform duration-300" />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="bg-mg-surface-card border-white/10 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-sm font-bold uppercase tracking-wider text-mg-text">Share Your Build</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <textarea
+              value={newPost.caption}
+              onChange={e => setNewPost(p => ({ ...p, caption: e.target.value }))}
+              placeholder="What did you build today?"
+              rows={4}
+              className="w-full bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm focus:border-mg-red focus:outline-none transition-colors resize-none"
+              data-testid="post-caption-input"
+            />
+            <input
+              value={newPost.media_url}
+              onChange={e => setNewPost(p => ({ ...p, media_url: e.target.value }))}
+              placeholder="Image URL (optional)"
+              className="w-full bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm focus:border-mg-red focus:outline-none transition-colors"
+              data-testid="post-media-input"
+            />
+            <button
+              onClick={handleCreatePost}
+              className="w-full bg-mg-red text-white font-headline font-bold text-xs tracking-widest uppercase py-4 hover:brightness-110 transition-colors"
+              data-testid="submit-post-btn"
+            >
+              Publish
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

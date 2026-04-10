@@ -33,11 +33,11 @@ function AppRouter() {
         <Route path="/configurator" element={<Configurator />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
-        <Route path="/product/:slug" element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
+        <Route path="/marketplace" element={<Marketplace />} />
+        <Route path="/product/:slug" element={<ProductDetail />} />
         <Route path="/garage" element={<ProtectedRoute><Garage /></ProtectedRoute>} />
         <Route path="/booking" element={<ProtectedRoute><Booking /></ProtectedRoute>} />
-        <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
+        <Route path="/community" element={<Community />} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
       </Routes>

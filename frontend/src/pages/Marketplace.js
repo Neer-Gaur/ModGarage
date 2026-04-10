@@ -2,18 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { MagnifyingGlass, Plus, ShoppingCart } from '@phosphor-icons/react';
+import { MagnifyingGlass, Lightning } from '@phosphor-icons/react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const HERO_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuAuHmASfV8kIYZaf4gKPBtxH19QLPEJViWcnGe7N-lS_DwaZebDIMmOq5IrxJWUIJ5loQwYrCJLzeMhPJebPNGuItMNcmoHdu0pdv3W6LZr8AgTQbuYP87-d-fcizjDohWHHP0layNwt7hFYF2QCn2TW51Ulh0WSatGDbpT7FzN3Gl3s_syGfqeSKnNGsTJUi4DbcTwYFwVBJTQZsAaIK3SBueYyZ6lPAD2uu-4_Y8HjsDn7mkkDVt0ZnXrGDZasCpTehbEdOaapnM';
 
 const CATEGORIES = [
-  { value: '', label: 'All' },
-  { value: 'rims', label: 'Rims' },
+  { value: '', label: 'All Parts' },
+  { value: 'rims', label: 'Wheels' },
   { value: 'exhaust', label: 'Exhaust' },
-  { value: 'spoiler', label: 'Spoiler' },
-  { value: 'headlights', label: 'Headlights' },
-  { value: 'suspension', label: 'Suspension' },
-  { value: 'interior', label: 'Interior' },
+  { value: 'spoiler', label: 'Body Kits' },
+  { value: 'suspension', label: 'Performance' },
+  { value: 'interior', label: 'Accessories' },
+  { value: 'headlights', label: 'Lighting' },
   { value: 'hood', label: 'Hood' },
   { value: 'vinyl', label: 'Vinyl' },
 ];
@@ -25,6 +26,7 @@ export default function Marketplace() {
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('newest');
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,10 +40,15 @@ export default function Marketplace() {
     if (category) params.set('category', category);
     if (search) params.set('search', search);
     axios.get(`${API}/products?${params}`)
-      .then(r => setProducts(r.data))
+      .then(r => {
+        let sorted = r.data;
+        if (sort === 'price_low') sorted = [...sorted].sort((a, b) => a.price - b.price);
+        else if (sort === 'price_high') sorted = [...sorted].sort((a, b) => b.price - a.price);
+        setProducts(sorted);
+      })
       .catch(() => toast.error('Failed to load products'))
       .finally(() => setLoading(false));
-  }, [category, search]);
+  }, [category, search, sort]);
 
   const handleAddToGarage = async (e, productId) => {
     e.stopPropagation();
@@ -54,101 +61,158 @@ export default function Marketplace() {
     try {
       await axios.post(`${API}/garage`, { car_id: primaryCar.car_id, product_id: productId }, { withCredentials: true });
       toast.success('Added to Garage!');
-    } catch (err) {
+    } catch {
       toast.error('Failed to add to garage');
     }
   };
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="marketplace-page">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <p className="font-mono text-xs tracking-[0.3em] text-mg-red uppercase mb-3">Catalog</p>
-          <h1 className="font-unbounded text-3xl md:text-4xl font-bold tracking-tight uppercase text-white">Marketplace</h1>
+    <div className="min-h-screen bg-mg-surface" data-testid="marketplace-page">
+      {/* Hero */}
+      <header className="relative h-[409px] w-full flex items-end overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-mg-surface via-mg-surface/40 to-transparent z-10" />
+        <img src={HERO_IMG} alt="Modified sports car" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="relative z-20 px-8 pb-12 w-full max-w-7xl mx-auto">
+          <h1 className="font-headline text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none mb-4">
+            Market<span className="text-mg-orange">place</span>
+          </h1>
+          <p className="font-label uppercase tracking-widest text-neutral-400 max-w-lg text-sm">
+            Precision components for elite builds. Engineered to push boundaries.
+          </p>
         </div>
+      </header>
 
-        {/* Search */}
-        <div className="relative mb-6">
-          <MagnifyingGlass size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search parts, brands..."
-            className="w-full bg-[#0A0A0A] border border-white/10 pl-12 pr-4 py-3 text-white font-manrope text-sm focus:border-mg-red focus:outline-none transition-colors"
-            data-testid="marketplace-search"
-          />
-        </div>
-
-        {/* Categories */}
-        <div className="flex flex-wrap gap-[1px] bg-white/5 mb-8">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.value}
-              onClick={() => setCategory(cat.value)}
-              className={`px-4 py-2.5 font-mono text-[10px] tracking-[0.2em] uppercase transition-colors ${
-                category === cat.value
-                  ? 'bg-mg-red text-white'
-                  : 'bg-mg-dark text-white/40 hover:text-white hover:bg-mg-surface'
-              }`}
-              data-testid={`cat-${cat.value || 'all'}`}
+      {/* Sticky Catalog Controls */}
+      <section className="sticky top-20 z-40 bg-mg-surface/90 backdrop-blur-md border-y border-white/5">
+        <div className="max-w-7xl mx-auto px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex overflow-x-auto no-scrollbar gap-4 w-full md:w-auto">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.value}
+                onClick={() => setCategory(cat.value)}
+                className={`px-6 py-2 font-label text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-colors ${
+                  category === cat.value
+                    ? 'bg-mg-red text-white'
+                    : 'bg-mg-surface-dim hover:bg-mg-surface-high text-mg-text'
+                }`}
+                data-testid={`cat-${cat.value || 'all'}`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 w-full md:w-auto justify-end">
+            <div className="relative hidden sm:block">
+              <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="SEARCH PARTS..."
+                className="bg-mg-surface-bright border-none text-xs tracking-widest pl-9 pr-4 py-2 w-48 focus:ring-1 focus:ring-mg-red focus:w-64 transition-all duration-500 text-mg-text"
+                data-testid="marketplace-search"
+              />
+            </div>
+            <span className="font-label text-[10px] text-neutral-500 uppercase tracking-widest">Sort By:</span>
+            <select
+              value={sort}
+              onChange={e => setSort(e.target.value)}
+              className="bg-transparent border-none font-label text-xs uppercase tracking-widest focus:ring-0 text-mg-orange cursor-pointer"
+              data-testid="sort-select"
             >
-              {cat.label}
-            </button>
-          ))}
+              <option value="newest">Newest</option>
+              <option value="price_low">Price: Low to High</option>
+              <option value="price_high">Price: High to Low</option>
+            </select>
+          </div>
         </div>
+      </section>
 
-        {/* Products Grid */}
+      {/* Product Grid */}
+      <section className="max-w-7xl mx-auto px-8 py-12">
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-[1px] bg-white/5">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="bg-mg-dark p-4">
-                <div className="aspect-[4/3] bg-mg-surface animate-pulse mb-4" />
-                <div className="h-4 bg-mg-surface animate-pulse w-3/4 mb-2" />
-                <div className="h-3 bg-mg-surface animate-pulse w-1/2" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-12">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="flex flex-col">
+                <div className="aspect-square bg-mg-surface-dim animate-pulse" />
+                <div className="pt-6 space-y-2">
+                  <div className="h-5 bg-mg-surface-dim animate-pulse w-3/4" />
+                  <div className="h-3 bg-mg-surface-dim animate-pulse w-1/2" />
+                </div>
               </div>
             ))}
           </div>
         ) : products.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-white/30 font-manrope">No products found</p>
+            <p className="text-neutral-500 font-body">No products found matching your criteria.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-[1px] bg-white/5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-12">
             {products.map(product => (
               <div
                 key={product.product_id}
                 onClick={() => navigate(`/product/${product.slug}`)}
-                className="bg-mg-dark group cursor-pointer card-hover"
+                className="group flex flex-col cursor-pointer"
                 data-testid={`product-${product.slug}`}
               >
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-square overflow-hidden bg-mg-surface-dim">
                   <img
                     src={product.images?.[0] || ''}
                     alt={product.name}
-                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    loading="lazy"
                   />
-                  <span className="tag-mono absolute top-3 left-3">{product.category}</span>
+                  {product.category && (
+                    <div className="absolute top-4 right-4 bg-mg-cyan/20 backdrop-blur-md px-3 py-1">
+                      <span className="text-mg-cyan font-headline text-[10px] font-bold uppercase tracking-tighter">{product.category}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="pt-6 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-headline font-bold text-lg uppercase tracking-tight leading-tight text-mg-text">{product.name}</h3>
+                    <span className="text-mg-cyan font-headline font-medium ml-4 whitespace-nowrap">{formatINR(product.price)}</span>
+                  </div>
+                  <p className="text-neutral-500 text-xs font-label uppercase tracking-widest">
+                    {product.brand} {product.description ? `\u2022 ${product.description.substring(0, 40)}` : ''}
+                  </p>
                   <button
                     onClick={(e) => handleAddToGarage(e, product.product_id)}
-                    className="absolute bottom-3 right-3 w-10 h-10 bg-mg-red flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-[#E62600]"
+                    className="w-full mt-4 py-4 bg-mg-surface-bright group-hover:bg-mg-red text-mg-text group-hover:text-white transition-all duration-300 font-label text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2"
                     data-testid={`add-garage-${product.slug}`}
                   >
-                    <Plus size={18} weight="bold" className="text-white" />
+                    Add to Garage <Lightning size={14} weight="fill" />
                   </button>
-                </div>
-                <div className="p-4">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-white/30 uppercase mb-1">{product.brand}</p>
-                  <h3 className="font-manrope text-sm font-semibold text-white mb-2 group-hover:text-mg-red transition-colors">{product.name}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm text-mg-red font-semibold">{formatINR(product.price)}</span>
-                    <span className="font-mono text-[10px] text-white/20 tracking-wider">+{formatINR(product.installation_cost)} install</span>
-                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
+
+      {/* Newsletter CTA */}
+      <section className="mt-20 py-24 bg-mg-surface-dim">
+        <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <h2 className="font-headline text-4xl font-black uppercase tracking-tight mb-4 text-mg-text">
+              The Modification <span className="text-mg-orange">Intel</span>
+            </h2>
+            <p className="text-neutral-400 font-label text-sm uppercase tracking-widest">
+              Get early access to limited edition drops and performance data leaks.
+            </p>
+          </div>
+          <div className="flex gap-0">
+            <input
+              className="flex-grow bg-mg-surface-bright border-none text-xs font-label uppercase tracking-widest p-4 focus:ring-1 focus:ring-mg-red text-mg-text"
+              placeholder="ENTER EMAIL"
+              type="email"
+              data-testid="newsletter-email"
+            />
+            <button className="bg-mg-red text-white px-8 font-label text-xs font-black uppercase tracking-widest" data-testid="newsletter-join">
+              Join
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
