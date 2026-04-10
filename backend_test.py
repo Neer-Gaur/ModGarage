@@ -6,8 +6,8 @@ from datetime import datetime
 class ModGarageAPITester:
     def __init__(self, base_url="https://car-mod-platform-1.preview.emergentagent.com"):
         self.base_url = base_url
-        self.session_token = "test_session_1775810709927"  # From mongosh creation
-        self.user_id = "test-user-1775810709927"
+        self.session_token = "test_session_1775814406027"  # From mongosh creation
+        self.user_id = "test-user-1775814406027"
         self.tests_run = 0
         self.tests_passed = 0
         self.car_id = None

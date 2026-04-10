@@ -5,9 +5,10 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                'unbounded': ['Unbounded', 'sans-serif'],
-                'manrope': ['Manrope', 'sans-serif'],
-                'mono': ['JetBrains Mono', 'monospace'],
+                'unbounded': ['Outfit', 'sans-serif'],
+                'manrope': ['Outfit', 'sans-serif'],
+                'display': ['"Bebas Neue"', 'sans-serif'],
+                'mono': ['"JetBrains Mono"', 'monospace'],
             },
             borderRadius: {
                 lg: 'var(--radius)',
