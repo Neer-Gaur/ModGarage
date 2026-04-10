@@ -1,0 +1,118 @@
+{
+  "project_name": "ModGarage",
+  "theme": "dark",
+  "archetype": "Archetype 2 (Performance Pro) fused with Archetype 5 (Jewel & Luxury). Deep Obsidian base with High-Octane Racing Red and Electric White accents.",
+  "design_philosophy": "High-end automotive configurator meets underground tuner club. Sharp, masculine, precise, and heavily engineered. Heavy use of negative space, large typography, and cinematic lighting. Emphasize the 'machine' aspect with metallic textures and carbon-fiber-inspired grid lines.",
+  "colors": {
+    "background": "#050505",
+    "surface": "#121212",
+    "surface_glass": "rgba(18, 18, 18, 0.65)",
+    "border": "rgba(255, 255, 255, 0.08)",
+    "border_glow": "rgba(255, 42, 0, 0.3)",
+    "primary": "#FF2A00",
+    "primary_hover": "#E62600",
+    "text": "#F5F5F5",
+    "text_muted": "#8A8A93",
+    "accent": "#00E5FF",
+    "success": "#00FF66",
+    "danger": "#FF2A00"
+  },
+  "typography": {
+    "primary_font": "Unbounded",
+    "secondary_font": "Manrope",
+    "mono_font": "JetBrains Mono",
+    "headings": {
+      "font": "Unbounded",
+      "style": "Uppercase, tight tracking (-0.02em to -0.04em), extreme font weights (Light 300 or Black 900)",
+      "h1": "text-5xl md:text-6xl font-black tracking-tighter uppercase",
+      "h2": "text-3xl md:text-4xl font-bold tracking-tight uppercase"
+    },
+    "body": {
+      "font": "Manrope",
+      "style": "Clean, highly legible, slightly loose line-height (leading-relaxed)",
+      "base": "text-base font-medium text-gray-300"
+    },
+    "labels": {
+      "font": "JetBrains Mono",
+      "style": "text-xs uppercase tracking-[0.2em] text-gray-500"
+    }
+  },
+  "layout_and_spacing": {
+    "general": "Generous Spacing (p-12 to p-24) on marketing/landing pages. Dense, precise grid (p-4 to p-6) on Dashboard/Admin views.",
+    "border_radius": "Almost entirely sharp edges (rounded-none or max rounded-sm) to feel mechanical and precise.",
+    "grids": "Heavy use of 'Bento Grids' with 1px border-white/10 and 'Control Room' grid for the Admin/Booking flow."
+  },
+  "components_strategy": {
+    "navigation": "Crystal Glass header (backdrop-blur-2xl bg-[#050505]/60), 1px solid border-white/5 bottom. Navigation links should be Manrope, text-sm, uppercase.",
+    "buttons": "Primary: Solid #FF2A00, text-white, rounded-none, uppercase Unbounded, text-sm tracking-widest. Hover: inset shadow or glow. Secondary: Transparent with 1px border-white/20, text-white. Hover: bg-white text-black.",
+    "cards": "Surface #121212, sharp corners, 1px border-white/10. Interactive cards get a subtle -translate-y-1 and shadow-[0_0_15px_rgba(255,42,0,0.15)] on hover.",
+    "inputs": "Shadcn customized. Dark background (#0A0A0A), sharp corners (rounded-none), border-white/20. Focus state: ring-0, border-primary.",
+    "tags": "JetBrains Mono, text-[10px], border border-white/20, px-2 py-1 uppercase bg-white/5."
+  },
+  "motion_and_interactions": {
+    "hover_states": "High contrast shifts. Muted text becomes pure white. Borders glow subtly.",
+    "page_transitions": "Framer Motion: fade in and slide up (y: 20 -> 0) with easeOut.",
+    "scrollytelling_hero": "CRITICAL: Implement GSAP ScrollTrigger pinned section. Since actual 40 3D frames are unavailable for MVP, mock the 40-frame sequence by using a heavy parallax container where a base car image stays pinned, and over 40 scroll 'steps' (or just general progress), transparent overlays (UI scanning lines, glowing neon underglow, mechanical part reveals, text readouts) animate in/out to simulate the car being 'scanned and modified'. Text overlays (Engine Specs, Aerodynamics) MUST fade in sequentially based on scroll progress."
+  },
+  "key_features_guidelines": {
+    "how_it_works": "Bento Grid layout with 3 major steps. Use large typography numbers ('01', '02') in Unbounded Black with text-transparent stroke (WebkitTextStroke: '1px rgba(255,255,255,0.2)').",
+    "onboarding_flow": "Multi-step modal/page for Car Profile. Very minimal. 'Control Room' aesthetic. Large input fields. Make -> Model -> Year -> Variant. Use large, selectable grid buttons for choices.",
+    "product_marketplace": "Dark E-commerce. Image-heavy. Product cards should have an 'Add to Garage' button that appears cleanly on hover. Sidebar category filters using mono-spaced labels.",
+    "my_garage": "Split layout bento box. Left: Virtual bag (list of added parts) with a fixed bottom bar showing 'LIVE TOTAL COST' in glowing red font. Right: A large, cinematic image placeholder with 'OPEN 3D CONFIGURATOR [COMING SOON]' overlay in a frosted glass box.",
+    "booking_flow": "Tactical, precise UI. Step 1: Map/Address input (dark mode map style). Step 2: Shadcn Calendar (dark customized) for slots. Step 3: Receipt-style price breakdown using JetBrains Mono (like a mechanic's terminal). Step 4: Success confirmation with green accents.",
+    "community_feed": "Instagram-style vertical scroll. Edge-to-edge images of tuned cars. Post header with avatar and username. CRITICAL: Implement 'Hotspots' (small pulsing rings) on the image that, when hovered, show a tooltip of the tagged car part (e.g., 'Brembo Brakes - $1,200').",
+    "admin_dashboard": "Strict, dense 'Control Room' grid. border-collapse. Data-heavy. No decorative elements. Use Phosphor Icons for actions."
+  },
+  "development_rules": {
+    "testing": "All interactive and key informational elements MUST include a 'data-testid' attribute (e.g., data-testid='add-to-garage-btn').",
+    "components": "Use Shadcn UI for complex interactives (Calendar, Dropdown, Dialog) but heavily strip the default styling to match the sharp, dark theme. Use raw HTML/Tailwind for the marketing layouts."
+  },
+  "assets": {
+    "fonts_required": [
+      "Unbounded",
+      "Manrope",
+      "JetBrains Mono"
+    ],
+    "icons": "Phosphor Icons (@phosphor-icons/react) - Use 'regular' or 'bold' weight for sharp visibility.",
+    "images": {
+      "hero_base_car": {
+        "url": "https://images.pexels.com/photos/9139586/pexels-photo-9139586.jpeg",
+        "description": "Base luxury sports car for the GSAP scrollytelling section."
+      },
+      "marketplace_parts": [
+        {
+          "url": "https://images.unsplash.com/photo-1771623915340-d3c68845e400?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxjYXIlMjBlbmdpbmUlMjBwYXJ0cyUyMGNhcmJvbiUyMGZpYmVyfGVufDB8fHx8MTc3NTgwOTE2N3ww&ixlib=rb-4.1.0&q=85",
+          "description": "Ferrari engine orange accents (Part example 1)"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1745439988955-da4eee57918a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjByaW0lMjBkZXRhaWwlMjBkYXJrfGVufDB8fHx8MTc3NTgwOTE4MHww&ixlib=rb-4.1.0&q=85",
+          "description": "Mercedes rim detail (Part example 2)"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1773502605492-5d5e8c0c17a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHw0fHxjYXIlMjBlbmdpbmUlMjBwYXJ0cyUyMGNhcmJvbiUyMGZpYmVyfGVufDB8fHx8MTc3NTgwOTE2N3ww&ixlib=rb-4.1.0&q=85",
+          "description": "BMW M power engine carbon (Part example 3)"
+        }
+      ],
+      "community_posts": [
+        {
+          "url": "https://images.unsplash.com/photo-1774576320208-9914d1fc5be5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzcG9ydHMlMjBjYXIlMjB0dW5pbmclMjBnYXJhZ2UlMjBkYXJrfGVufDB8fHx8MTc3NTgwOTE2OHww&ixlib=rb-4.1.0&q=85",
+          "description": "Dark blue car red bull branding"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1628273148878-b9ebaec15818?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHw0fHxzcG9ydHMlMjBjYXIlMjB0dW5pbmclMjBnYXJhZ2UlMjBkYXJrfGVufDB8fHx8MTc3NTgwOTE2OHww&ixlib=rb-4.1.0&q=85",
+          "description": "Gray porsche 911"
+        }
+      ],
+      "garage_backgrounds": [
+        {
+          "url": "https://images.unsplash.com/photo-1774088249014-b0d7d907ad16?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwzfHxjYXIlMjB0dW5pbmclMjBtZWNoYW5pYyUyMGdhcmFnZXxlbnwwfHx8fDE3NzU4MDkxODJ8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Mechanics working on race car - Good for How it works section"
+        },
+        {
+          "url": "https://images.pexels.com/photos/27703394/pexels-photo-27703394.jpeg",
+          "description": "Dimly lit underground garage - Use for My Garage 3D Configurator placeholder background"
+        }
+      ]
+    }
+  }
+}
