@@ -1,34 +1,99 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* ModGarage Custom Styles */
+
+/* Glass-morphism */
+.glass {
+    background: rgba(5, 5, 5, 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Stroke text */
+.text-stroke {
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.15);
+    -webkit-text-fill-color: transparent;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Glow effects */
+.glow-red {
+    box-shadow: 0 0 20px rgba(255, 42, 0, 0.3), 0 0 60px rgba(255, 42, 0, 0.1);
+}
+.glow-red-text {
+    text-shadow: 0 0 20px rgba(255, 42, 0, 0.5);
 }
 
-.App-link {
-    color: #61dafb;
+/* Card hover */
+.card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 20px rgba(255, 42, 0, 0.15);
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Fade animations */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes pulse-ring {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+}
+.animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+.animate-delay-100 { animation-delay: 0.1s; }
+.animate-delay-200 { animation-delay: 0.2s; }
+.animate-delay-300 { animation-delay: 0.3s; }
+.animate-delay-400 { animation-delay: 0.4s; }
+
+/* Tag mono style */
+.tag-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* Scrollytelling canvas */
+.scroll-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Community hotspot pulse */
+.hotspot-pulse {
+    position: relative;
+}
+.hotspot-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 42, 0, 0.6);
+    animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Bento grid */
+.bento-grid {
+    display: grid;
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.05);
+}
+.bento-grid > * {
+    background: #050505;
 }
