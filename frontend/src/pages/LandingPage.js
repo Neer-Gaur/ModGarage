@@ -1,22 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowDown, Lightning, Wrench, CalendarCheck } from '@phosphor-icons/react';
+import { CheckCircle, ShieldCheck, CaretLeft, CaretRight } from '@phosphor-icons/react';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const FRAME_COUNT = 40;
 const frameSrc = (i) => `/scroll-images/ezgif-frame-${String(i + 1).padStart(3, '0')}.jpg`;
-
 const SCROLL_WORDS = ['WRAPS', 'RIMS', 'TYRES', 'HOODS', 'LAMPS'];
+
+const IMAGES = {
+  parts: 'https://lh3.googleusercontent.com/aida-public/AB6AXuADWkNeIc0eFDevRSynE2PxfNTpS6ZFsriyT8TCjPkSIvrI1n-nLwCB5EYPaHsFq26h1LoLY24eC5Uke66b46WvoGtc8mk1DwFTocWUuvpgssv7HS9_6mewYLrVgnwGfoY1CzBJfZfHHbSAn8h4WmQZDQsGspgajQI61UNreDFFeT867NBtOctMMYXkAmYDz_dya-ATP1hhqVwE-ZgQSW80pHKyWtV0G9GM48EmLrlUVLE7c4R8brAUvwUorbBe5Z9ulwpbkxgsPCw',
+  garage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsKuGMWfKXiOZL5wTp8raqUquCJG-NKkeSsIHc7GHycX34vt-nc5o0LdhyLHdXeZv5TZ2hXjNchpH8MhWjPFVnQPV_12qC-rp5PJYCSS_AHuQpzv8FpbnNMlCZ5xV5koDS-SlOSDnpjMP9YiTl0Z4zMlZ9es8Rz5tt-G8H9iEw8QrUhcslPeoT3L-CJORmOsNiqZr7Y-YcetwBfUYM8fez80OJLkIRvlTbA05mYKsXDS-upAe-kfv8FUULou6A6Yq7qpBHsSYcA2s',
+  cta: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDftTtHKCJgrEExqnD0DI40wUTj4puq0letryYV5DWjMQmiiDUK6FNmoASrHTblT0NdqElnGJW-hwFEH8qK-BRA7SAl59zQDCreSXtI5jQKuT3HPb0cfoWxBiG0y2KN-mEWgydPSgpu2NlkhlRaERXVo6beeGgpILgO7OIGYjzH1vjpgC2ffZXK641VzPtnKAj3MyTjMDRMoUoZ5la7NZLaVQnSfu6vjSk5rd2rTiWJM4b7gF8D_jwANox5mwRlrbGPSt6BNLdKxJU',
+};
+
+const BUILDS = [
+  {
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAhp4dBF7dft_nUvWAs8eXq0jvL3MC2gjrp6UTZV5b9SYolPw5z5FgatOKf311hC3OTlgUq0VTRH4s2-80qWClT_mOI7kZi7pUNcQ7NRQMw3xqOaLAJYXbRBcMARvuQxRQl7g83ICRiXdvd07nWhBZEa8FhTyWCEDIAhu21yvSyYGnJJnYu4lkl5elBw6Z0J4VjpsxopzxZYLj1nacFIjMXRxuSdJBNxPzjK12KK4766-Nug6KjvQ0zb6s8HS3c797eTBUapqC2Zvs',
+    user: '@CARBON_REBEL', title: 'Midnight 911 GT3', desc: 'Full Aero Kit + Stage 2 Tune',
+  },
+  {
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBq4YDg5NtZs-Zdd3Rh3g5cNDketza8d03Gymk2mxch2-KfWBlKGPhkHQf9j1Y7KohLI2GcyEMRW_Us0FvV1sEkzvIb6nMryopCr4VGxSep3vKr3h0BqRzX3rDdgyv9EoUTmyJ3FJFPcGv662l0q6PdEPehZXNsoE-R17c0kcUX4jetQSMpYT44hR7PQAE6_M1d8B61rsPOlZbKlHPuecYFyxug4147umUWKK-D26JsK_9mDy7BxUUeyKj_Chp9CfP_iv4g0QheVwA',
+    user: '@APEX_HUNTER', title: 'Stealth Supra A90', desc: 'Widebody Conversion',
+  },
+  {
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuApqUEk8ZoZFhf-avL7-R9yOQRLLOFv8X6QxM6jeIje3eH2Inf-nQgs2hMFWOEoSVzH3BkciE1cEX7LIu3WWbyz-ssI2RUMqea_UGuQVP3RWzgxtuSMalLulI8NkImY3-pWLbkr0mtYay_dBfl39AbeWdz4qMOI_xreecF4FkPzQecvL9BWN-970zqXYWfFdgJElBmMG939TAOTRgXKAPUrCuEItakpBS8SGBBGVnelq307RrzYJhSLZSQB4fezMybqnyB-nejM6pc',
+    user: '@TRACK_MONSTER', title: 'Challenger Hellcat Redeye', desc: 'Suspension & Drag Setup',
+  },
+];
 
 export default function LandingPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const heroRef = useRef(null);
   const canvasRef = useRef(null);
+  const communityRef = useRef(null);
   const [imagesLoaded, setImagesLoaded] = useState(false);
 
   const handleGetStarted = () => {
@@ -24,6 +45,11 @@ export default function LandingPage() {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     const redirectUrl = window.location.origin + '/dashboard';
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
+  const scrollBuilds = (dir) => {
+    if (!communityRef.current) return;
+    communityRef.current.scrollBy({ left: dir === 'left' ? -420 : 420, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -63,7 +89,6 @@ export default function LandingPage() {
 
     const frameObj = { value: 0 };
 
-    // Main GSAP timeline
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: heroRef.current,
@@ -75,7 +100,6 @@ export default function LandingPage() {
       }
     });
 
-    // Frame animation — full scroll range
     tl.to(frameObj, {
       value: FRAME_COUNT - 1,
       snap: 'value',
@@ -83,7 +107,6 @@ export default function LandingPage() {
       onUpdate: () => drawFrame(frameObj.value)
     }, 0);
 
-    // Red vignette pulses in during word animations
     tl.fromTo('.red-pulse-overlay',
       { opacity: 0 },
       { opacity: 1, duration: 0.5 },
@@ -91,11 +114,9 @@ export default function LandingPage() {
     );
     tl.to('.red-pulse-overlay', { opacity: 0, duration: 0.1 }, 0.85);
 
-    // Title: fade out quickly
     tl.to('.scroll-title', { opacity: 0, scale: 0.85, duration: 0.08, ease: 'power2.in' }, 0.06);
     tl.to('.scroll-arrow', { opacity: 0, duration: 0.05 }, 0.04);
 
-    // Bounce each word in sequence
     const wordStart = 0.12;
     const wordDur = 0.10;
     const wordGap = 0.04;
@@ -104,13 +125,11 @@ export default function LandingPage() {
       const pos = wordStart + i * (wordDur + wordGap);
       const sel = `.scroll-word-${word.toLowerCase()}`;
 
-      // Bounce IN: scale from big, opacity 0 → 1
       tl.fromTo(sel,
         { opacity: 0, scale: 2, y: 40 },
         { opacity: 1, scale: 1, y: 0, duration: wordDur * 0.45, ease: 'back.out(2.5)' },
         pos
       );
-      // Red flash on bounce
       tl.fromTo('.word-flash',
         { opacity: 0 },
         { opacity: 0.2, duration: wordDur * 0.15, ease: 'power2.out' },
@@ -120,21 +139,18 @@ export default function LandingPage() {
         { opacity: 0, duration: wordDur * 0.3 },
         pos + wordDur * 0.15
       );
-      // Bounce OUT: scale down, fade
       tl.to(sel,
         { opacity: 0, scale: 0.5, y: -30, duration: wordDur * 0.45, ease: 'power3.in' },
         pos + wordDur * 0.55
       );
     });
 
-    // "WE GOT EVERYTHING" — final statement
     const finalPos = wordStart + SCROLL_WORDS.length * (wordDur + wordGap) + 0.02;
     tl.fromTo('.scroll-final',
       { opacity: 0, scale: 1.4 },
       { opacity: 1, scale: 1, duration: 0.12, ease: 'back.out(2)' },
       finalPos
     );
-    // CTA button slides up
     tl.fromTo('.scroll-final-cta',
       { opacity: 0, y: 40 },
       { opacity: 1, y: 0, duration: 0.1, ease: 'power2.out' },
@@ -153,183 +169,268 @@ export default function LandingPage() {
     };
   }, []);
 
-  const steps = [
-    { num: '01', title: 'SELECT YOUR RIDE', desc: 'Choose your car make, model, and year to get started', icon: Lightning },
-    { num: '02', title: 'CUSTOMIZE PARTS', desc: 'Browse and add modifications to your virtual garage', icon: Wrench },
-    { num: '03', title: 'BOOK & TRANSFORM', desc: 'Schedule a pickup and our experts handle the rest', icon: CalendarCheck },
-  ];
-
   return (
-    <div className="bg-black" data-testid="landing-page">
-      {/* ======= SCROLLYTELLING HERO ======= */}
-      <section ref={heroRef} className="relative h-screen w-full overflow-hidden bg-black">
-        {/* Canvas */}
+    <div className="bg-mg-surface" data-testid="landing-page">
+
+      {/* ======================= SCROLLYTELLING HERO ======================= */}
+      <section ref={heroRef} className="relative h-screen w-full overflow-hidden bg-mg-surface">
         <canvas ref={canvasRef} className="scroll-canvas" />
 
-        {/* Dark overlays for contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/70 z-[1]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-black/30 z-[1]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-mg-surface/60 via-transparent to-mg-surface/70 z-[1]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-mg-surface/30 to-mg-surface/30 z-[1]" />
 
-        {/* Red vignette — pulses during word animations */}
         <div className="red-pulse-overlay absolute inset-0 z-[2] opacity-0" style={{
-          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(255, 42, 0, 0.1) 70%, rgba(255, 42, 0, 0.2) 100%)'
+          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(250, 93, 0, 0.1) 70%, rgba(250, 93, 0, 0.2) 100%)'
         }} />
-
-        {/* Red flash on word bounce */}
         <div className="word-flash absolute inset-0 z-[2] opacity-0 bg-mg-red/10 pointer-events-none" />
-
-        {/* Grain texture overlay */}
         <div className="grain-overlay z-[3]" />
 
-        {/* Title overlay — visible at start */}
+        {/* Title overlay */}
         <div className="scroll-title absolute inset-0 flex items-center justify-center z-10">
           <div className="text-center px-4">
-            <p className="font-mono text-xs tracking-[0.4em] text-mg-red uppercase mb-6 font-semibold">Premium Car Modifications</p>
-            <h1 className="font-display text-7xl md:text-[9rem] lg:text-[11rem] leading-[0.85] uppercase text-white tracking-wide">
-              MOD<span className="text-mg-red">GARAGE</span>
+            <p className="font-label text-xs tracking-[0.4em] text-mg-red uppercase mb-6 font-semibold">Premium Car Modifications</p>
+            <h1 className="font-headline text-7xl md:text-[9rem] lg:text-[11rem] leading-[0.85] uppercase text-white tracking-tighter font-black">
+              MOD<span className="text-mg-red text-glow">GARAGE</span>
             </h1>
-            <p className="mt-6 text-base md:text-lg text-white/40 font-unbounded font-light max-w-md mx-auto tracking-wide">
-              Build your dream ride. One modification at a time.
+            <p className="mt-6 text-base md:text-lg text-white/40 font-body font-light max-w-md mx-auto tracking-wide">
+              Precision engineering meets absolute performance.
             </p>
           </div>
         </div>
 
-        {/* Scroll arrow */}
+        {/* Scroll indicator */}
         <div className="scroll-arrow absolute bottom-10 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
-          <span className="font-mono text-[10px] tracking-[0.4em] text-white/20 uppercase">Scroll</span>
-          <ArrowDown size={18} weight="bold" className="text-mg-red/60 animate-bounce" />
+          <span className="text-xs uppercase tracking-[0.2em] text-neutral-500 font-label">Scroll to Explore</span>
+          <div className="w-[1px] h-12 bg-gradient-to-b from-mg-red to-transparent" />
         </div>
 
-        {/* ======= BOUNCING WORD OVERLAYS ======= */}
+        {/* Bouncing word overlays */}
         {SCROLL_WORDS.map((word) => (
           <div
             key={word}
             className={`scroll-word-${word.toLowerCase()} absolute inset-0 flex items-center justify-center z-10 opacity-0 pointer-events-none`}
           >
-            <span className="font-display text-[8rem] md:text-[12rem] lg:text-[16rem] leading-none text-white uppercase tracking-wider drop-shadow-[0_0_60px_rgba(255,42,0,0.3)]">
+            <span className="font-headline text-[8rem] md:text-[12rem] lg:text-[16rem] leading-none text-white uppercase tracking-wider drop-shadow-[0_0_60px_rgba(250,93,0,0.3)] font-black">
               {word}
             </span>
           </div>
         ))}
 
-        {/* ======= FINAL STATEMENT ======= */}
+        {/* Final statement */}
         <div className="scroll-final absolute inset-0 flex items-center justify-center z-10 opacity-0">
           <div className="text-center">
-            <span className="font-display text-5xl md:text-[5rem] lg:text-[7rem] leading-[0.9] text-white/60 uppercase tracking-wider block">
+            <span className="font-headline text-5xl md:text-[5rem] lg:text-[7rem] leading-[0.9] text-white/60 uppercase tracking-wider block font-black">
               We Got
             </span>
-            <span className="font-display text-6xl md:text-[7rem] lg:text-[10rem] leading-[0.85] text-mg-red uppercase tracking-wider block glow-red-text">
+            <span className="font-headline text-6xl md:text-[7rem] lg:text-[10rem] leading-[0.85] text-mg-red uppercase tracking-wider block glow-red-text font-black">
               Everything
             </span>
             <div className="scroll-final-cta opacity-0 mt-10">
               <button
                 onClick={handleGetStarted}
-                className="bg-mg-red text-white font-unbounded text-sm font-bold tracking-[0.2em] uppercase px-12 py-5 hover:bg-[#E62600] transition-all glow-red"
+                className="bg-mg-red text-white font-headline text-lg font-bold tracking-[0.1em] uppercase px-12 py-5 hover:brightness-110 transition-all shadow-[0_0_30px_rgba(250,93,0,0.3)] active:scale-95"
                 data-testid="hero-get-started-btn"
               >
-                {user ? 'Go to Dashboard' : 'Get Started'}
+                {user ? 'Go to Dashboard' : 'Start Building'}
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ======= RED DIVIDER ======= */}
-      <div className="red-divider" />
+      {/* ======================= MAIN CONTENT ======================= */}
+      <main className="relative bg-mg-surface">
 
-      {/* ======= HOW IT WORKS ======= */}
-      <section className="py-24 md:py-32 px-6 bg-black" data-testid="how-it-works">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-16">
-            <p className="font-mono text-xs tracking-[0.4em] text-mg-red uppercase mb-3 font-semibold">The Process</p>
-            <h2 className="font-unbounded text-3xl md:text-4xl font-extrabold tracking-tight uppercase text-white">
-              How It <span className="text-mg-red">Works</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 bento-grid">
-            {steps.map(({ num, title, desc, icon: Icon }) => (
-              <div key={num} className="p-8 md:p-12 group relative overflow-hidden">
-                <span className="font-display text-[6rem] md:text-[8rem] leading-none text-mg-red/10 absolute -top-4 -left-2">{num}</span>
-                <div className="relative z-10">
-                  <div className="mb-6 w-12 h-12 border border-mg-red/20 flex items-center justify-center group-hover:border-mg-red/60 group-hover:bg-mg-red/5 transition-all">
-                    <Icon size={22} weight="bold" className="text-mg-red/60 group-hover:text-mg-red transition-colors" />
-                  </div>
-                  <h3 className="font-unbounded text-sm font-bold tracking-[0.1em] uppercase text-white mb-3">{title}</h3>
-                  <p className="text-white/30 font-unbounded text-sm leading-relaxed font-light">{desc}</p>
-                </div>
+        {/* ---------- PRECISION PARTS ---------- */}
+        <section className="relative min-h-screen flex items-center py-24" data-testid="precision-parts">
+          <div className="container mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="order-2 lg:order-1">
+              <div className="inline-block px-4 py-1 bg-mg-surface-bright text-mg-cyan font-label text-xs tracking-widest uppercase mb-6">
+                Engineered Specs
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ======= RED DIVIDER ======= */}
-      <div className="red-divider" />
-
-      {/* ======= COMMUNITY PREVIEW ======= */}
-      <section className="py-24 px-6 bg-black" data-testid="community-preview">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-end justify-between mb-12">
-            <div>
-              <p className="font-mono text-xs tracking-[0.4em] text-mg-red uppercase mb-3 font-semibold">Community</p>
-              <h2 className="font-unbounded text-3xl md:text-4xl font-extrabold tracking-tight uppercase text-white">
-                Featured <span className="text-mg-red">Builds</span>
+              <h2 className="text-5xl md:text-7xl font-headline font-black mb-8 leading-tight text-mg-text">
+                PRECISION <br /><span className="text-mg-red">PARTS</span>
               </h2>
+              <p className="text-neutral-400 text-lg leading-relaxed mb-10 max-w-lg font-body">
+                Every component in our marketplace is vetted for structural integrity and thermal efficiency.
+                From forged wheels to titanium exhaust systems, we only stock the elite.
+              </p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 group">
+                  <div className="w-12 h-12 bg-mg-surface-high flex items-center justify-center group-hover:bg-mg-teal/20 transition-colors">
+                    <CheckCircle size={24} weight="bold" className="text-mg-cyan" />
+                  </div>
+                  <span className="font-headline font-bold text-xl uppercase tracking-wider text-mg-text">Tuned for Speed</span>
+                </div>
+                <div className="flex items-center gap-4 group">
+                  <div className="w-12 h-12 bg-mg-surface-high flex items-center justify-center group-hover:bg-mg-teal/20 transition-colors">
+                    <ShieldCheck size={24} weight="bold" className="text-mg-cyan" />
+                  </div>
+                  <span className="font-headline font-bold text-xl uppercase tracking-wider text-mg-text">Race Certified</span>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => user ? navigate('/community') : handleGetStarted()}
-              className="text-white/30 hover:text-mg-red font-mono text-xs tracking-wider uppercase transition-colors"
-            >
-              View All
-            </button>
+            <div className="order-1 lg:order-2 relative aspect-square bg-mg-surface-card overflow-hidden">
+              <img src={IMAGES.parts} alt="Precision engineered turbocharger" className="w-full h-full object-cover" loading="lazy" />
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-[1px] bg-mg-red/10">
-            {[
-              { img: 'https://images.unsplash.com/photo-1774576320208-9914d1fc5be5?w=600&h=400&fit=crop', caption: 'Carbon aero kit build' },
-              { img: 'https://images.unsplash.com/photo-1628273148878-b9ebaec15818?w=600&h=400&fit=crop', caption: 'Track-ready suspension setup' },
-              { img: 'https://images.unsplash.com/photo-1774088249014-b0d7d907ad16?w=600&h=400&fit=crop', caption: 'Full engine bay rebuild' },
-            ].map((post, i) => (
-              <div key={i} className="relative aspect-[4/3] overflow-hidden group bg-black cursor-pointer">
-                <img src={post.img} alt={post.caption} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                <div className="absolute inset-0 bg-mg-red/0 group-hover:bg-mg-red/5 transition-colors duration-500" />
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <p className="text-white text-sm font-unbounded font-semibold">{post.caption}</p>
+        </section>
+
+        {/* ---------- PROFESSIONAL INSTALLATION ---------- */}
+        <section className="relative min-h-screen flex items-center bg-mg-dark py-24" data-testid="professional-installation">
+          <div className="container mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="relative aspect-[4/5] bg-mg-surface-card overflow-hidden">
+              <img src={IMAGES.garage} alt="Professional mechanic" className="w-full h-full object-cover grayscale" loading="lazy" />
+              <div className="absolute inset-0 bg-mg-red/10 mix-blend-overlay" />
+            </div>
+            <div>
+              <div className="inline-block px-4 py-1 bg-mg-surface-bright text-mg-red font-label text-xs tracking-widest uppercase mb-6">
+                Certified Garages
+              </div>
+              <h2 className="text-5xl md:text-7xl font-headline font-black mb-8 leading-tight text-mg-text">
+                MASTERFUL <br /><span className="text-mg-red">EXECUTION</span>
+              </h2>
+              <p className="text-neutral-400 text-lg leading-relaxed mb-10 max-w-lg font-body">
+                Don't leave performance to chance. Connect with master technicians who treat
+                your build with the same reverence as a factory team.
+              </p>
+              <button
+                onClick={() => user ? navigate('/marketplace') : handleGetStarted()}
+                className="border-2 border-mg-red text-mg-red font-headline font-bold px-10 py-4 hover:bg-mg-red hover:text-white transition-all uppercase tracking-wider active:scale-95"
+                data-testid="find-shop-btn"
+              >
+                Find a Shop
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------- THE ASSEMBLY LINE ---------- */}
+        <section className="py-32 bg-mg-surface" data-testid="assembly-line">
+          <div className="container mx-auto px-8">
+            <div className="mb-20">
+              <h3 className="text-sm font-label uppercase tracking-[0.4em] text-neutral-500 mb-4">The Process</h3>
+              <h2 className="text-5xl font-headline font-black uppercase text-mg-text">The Assembly Line</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-l border-neutral-800">
+              {[
+                { num: '01', title: 'CHOOSE PARTS', desc: 'Browse our curated selection of aero, performance, and interior upgrades tailored to your VIN.' },
+                { num: '02', title: 'BOOK SERVICE', desc: 'Schedule your installation with a top-tier local garage from our certified partner network.' },
+                { num: '03', title: 'TRACK BUILD', desc: 'Monitor your transformation with live status updates, photos, and dyno results directly in the app.' },
+              ].map(({ num, title, desc }) => (
+                <div key={num} className="p-12 border-r border-b md:border-b-0 border-neutral-800 group hover:bg-mg-surface-dim transition-colors">
+                  <span className="text-6xl font-headline font-black text-neutral-800 group-hover:text-mg-red transition-colors">{num}</span>
+                  <h4 className="text-2xl font-headline font-bold uppercase mt-8 mb-4 text-mg-text">{title}</h4>
+                  <p className="text-neutral-500 font-body">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ---------- COMMUNITY BUILDS ---------- */}
+        <section className="py-32 bg-mg-dark overflow-hidden" data-testid="community-builds">
+          <div className="container mx-auto px-8 mb-16 flex justify-between items-end">
+            <div>
+              <h2 className="text-4xl font-headline font-black uppercase tracking-tight text-mg-text">Community Builds</h2>
+              <p className="text-neutral-500 mt-2 uppercase tracking-widest text-xs font-label">Featured Machines</p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => scrollBuilds('left')}
+                className="w-12 h-12 flex items-center justify-center bg-mg-surface-bright text-white hover:bg-mg-red transition-colors"
+                data-testid="community-scroll-left"
+              >
+                <CaretLeft size={20} weight="bold" />
+              </button>
+              <button
+                onClick={() => scrollBuilds('right')}
+                className="w-12 h-12 flex items-center justify-center bg-mg-surface-bright text-white hover:bg-mg-red transition-colors"
+                data-testid="community-scroll-right"
+              >
+                <CaretRight size={20} weight="bold" />
+              </button>
+            </div>
+          </div>
+          <div ref={communityRef} className="flex gap-8 px-8 overflow-x-auto no-scrollbar pb-12">
+            {BUILDS.map((build, i) => (
+              <div key={i} className="min-w-[400px] group relative flex-shrink-0">
+                <div className="aspect-square bg-mg-surface-card overflow-hidden">
+                  <img
+                    src={build.img}
+                    alt={build.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-mg-surface to-transparent">
+                  <span className="text-mg-cyan text-xs font-label tracking-widest">{build.user}</span>
+                  <h5 className="text-xl font-headline font-bold uppercase mt-2 text-mg-text">{build.title}</h5>
+                  <p className="text-neutral-400 text-sm mt-1 font-body">{build.desc}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ======= RED DIVIDER ======= */}
-      <div className="red-divider" />
+        {/* ---------- NEXT LEVEL CTA ---------- */}
+        <section className="relative py-48 bg-mg-surface" data-testid="next-level-cta">
+          <div className="absolute inset-0 z-0">
+            <img src={IMAGES.cta} alt="" className="w-full h-full object-cover opacity-20 grayscale" loading="lazy" />
+            <div className="absolute inset-0 bg-gradient-to-b from-mg-surface via-transparent to-mg-surface" />
+          </div>
+          <div className="container mx-auto px-8 relative z-10 text-center">
+            <h2 className="text-6xl md:text-8xl font-headline font-black mb-12 uppercase leading-none text-mg-text">
+              Ready for the<br /><span className="text-mg-red text-glow">Next Level?</span>
+            </h2>
+            <div className="flex flex-col md:flex-row gap-6 justify-center">
+              <button
+                onClick={() => user ? navigate('/configurator') : handleGetStarted()}
+                className="bg-mg-red text-white font-headline font-black text-lg px-16 py-6 uppercase hover:brightness-110 transition-all active:scale-95"
+                data-testid="build-config-btn"
+              >
+                Build Your Config
+              </button>
+              <button
+                onClick={() => user ? navigate('/marketplace') : handleGetStarted()}
+                className="bg-mg-surface-bright text-white font-headline font-black text-lg px-16 py-6 uppercase border border-neutral-700 hover:bg-neutral-800 transition-all active:scale-95"
+                data-testid="view-parts-btn"
+              >
+                View Parts
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
 
-      {/* ======= FINAL CTA ======= */}
-      <section className="py-32 px-6 bg-black relative overflow-hidden" data-testid="final-cta">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,42,0,0.06),transparent_70%)]" />
-        <div className="max-w-3xl mx-auto text-center relative z-10">
-          <h2 className="font-display text-6xl md:text-[8rem] lg:text-[10rem] leading-[0.85] uppercase text-white mb-4">
-            Start<br /><span className="text-mg-red glow-red-text">Modifying</span>
-          </h2>
-          <p className="text-white/30 font-unbounded text-base md:text-lg mb-12 max-w-lg mx-auto font-light">
-            Join thousands of car enthusiasts who trust ModGarage for premium modifications.
+      {/* ======================= FOOTER ======================= */}
+      <footer className="bg-neutral-950 w-full border-t border-neutral-800 grid grid-cols-1 md:grid-cols-3 gap-8 px-12 py-16" data-testid="footer">
+        <div className="flex flex-col gap-6">
+          <div className="text-lg font-bold text-mg-red font-headline uppercase tracking-tighter">ModGarage</div>
+          <p className="text-neutral-500 font-body text-sm max-w-xs leading-relaxed">
+            Dedicated to the pursuit of mechanical perfection. Engineered for those who demand more from their machines.
           </p>
-          <button
-            onClick={handleGetStarted}
-            className="bg-mg-red text-white font-unbounded text-sm font-bold tracking-[0.2em] uppercase px-14 py-5 hover:bg-[#E62600] transition-all glow-red"
-            data-testid="final-get-started-btn"
-          >
-            {user ? 'Go to Dashboard' : 'Get Started Now'}
-          </button>
+          <div className="text-mg-red text-sm font-body uppercase tracking-widest mt-4">
+            2026 ModGarage. Precision Engineering.
+          </div>
         </div>
-      </section>
-
-      {/* ======= FOOTER ======= */}
-      <footer className="border-t border-mg-red/10 py-8 px-6 bg-black">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <span className="font-display text-2xl tracking-wider text-white/20 uppercase">ModGarage</span>
-          <span className="font-mono text-[10px] tracking-wider text-white/10 uppercase">2026 All Rights Reserved</span>
+        <div className="flex flex-col gap-4">
+          <h6 className="text-white font-headline font-bold uppercase tracking-widest text-sm mb-2">Network</h6>
+          <div className="flex flex-col gap-3">
+            <Link to="/marketplace" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Marketplace</Link>
+            <Link to="/booking" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Certified Shops</Link>
+            <Link to="/community" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Community Gallery</Link>
+            <Link to="/garage" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Build Tracker</Link>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <h6 className="text-white font-headline font-bold uppercase tracking-widest text-sm mb-2">Connect</h6>
+          <div className="flex flex-col gap-3">
+            <a href="#" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Instagram</a>
+            <a href="#" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">YouTube</a>
+            <a href="#" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Terms of Service</a>
+            <a href="#" className="text-neutral-500 hover:text-mg-red transition-all font-body text-sm uppercase tracking-widest opacity-80 hover:opacity-100">Privacy Policy</a>
+          </div>
         </div>
       </footer>
     </div>
