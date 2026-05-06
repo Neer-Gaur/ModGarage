@@ -2,20 +2,19 @@ services:
   - type: web
     name: modsyndicate-api
     env: python
-    region: singapore  # closest to India
+    region: singapore
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        sync: false  # set in Render dashboard manually (sensitive)
+        sync: false                                      # set in dashboard (sensitive)
       - key: SUPABASE_URL
         value: https://zafmdeuolblehjrwseuu.supabase.co
       - key: SUPABASE_SERVICE_KEY
-        sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
+        sync: false                                      # set in dashboard (sensitive)
       - key: CORS_ORIGINS
         value: https://modsyndicate.in,https://www.modsyndicate.in
       - key: PYTHON_VERSION
