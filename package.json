@@ -2,8 +2,11 @@
   "name": "modgarage",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
-    "postinstall": "cd frontend && npm install",
+    "postinstall": "cd frontend && npm install --legacy-peer-deps",
     "start": "cd frontend && npm start",
     "build": "cd frontend && npm run build"
   },
