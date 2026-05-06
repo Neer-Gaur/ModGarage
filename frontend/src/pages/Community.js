@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import {
   ArrowFatUp, ArrowFatDown, ChatCircle, ShareNetwork, BookmarkSimple,
@@ -9,8 +9,7 @@ import {
   CaretDown, Hash, X, ImageSquare, Link as LinkIcon, Copy, Check
 } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { uploadToBucket } from '@/lib/supabase';
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -76,7 +75,7 @@ function PostCard({ post, onVote, onComment, onShare, onSave, user }) {
     if (showComments) { setShowComments(false); return; }
     setShowComments(true);
     try {
-      const r = await axios.get(`${API}/posts/${post.post_id}/comments`);
+      const r = await api.get(`/posts/${post.post_id}/comments`);
       setComments(r.data);
     } catch {}
   };
@@ -85,9 +84,9 @@ function PostCard({ post, onVote, onComment, onShare, onSave, user }) {
     if (!commentText.trim()) return;
     if (!user) { toast.error('Login to comment'); return; }
     try {
-      await axios.post(`${API}/posts/${post.post_id}/comments`, { content: commentText }, { withCredentials: true });
+      await api.post(`/posts/${post.post_id}/comments`, { content: commentText });
       setCommentText('');
-      const r = await axios.get(`${API}/posts/${post.post_id}/comments`);
+      const r = await api.get(`/posts/${post.post_id}/comments`);
       setComments(r.data);
       onComment(post.post_id);
     } catch { toast.error('Failed to comment'); }
@@ -238,13 +237,14 @@ export default function Community() {
   const [sortBy, setSortBy] = useState('new');
   const [loading, setLoading] = useState(true);
   const [newPost, setNewPost] = useState({ caption: '', media_url: '', channel_id: '' });
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [newChannel, setNewChannel] = useState({ name: '', description: '' });
   const [postDialogOpen, setPostDialogOpen] = useState(false);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
 
   const loadChannels = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/channels`);
+      const r = await api.get(`/channels`);
       setChannels(r.data);
     } catch {}
   }, []);
@@ -254,7 +254,7 @@ export default function Community() {
     try {
       const params = new URLSearchParams({ sort_by: sortBy });
       if (activeChannel) params.set('channel', activeChannel);
-      const r = await axios.get(`${API}/posts?${params}`);
+      const r = await api.get(`/posts?${params}`);
       setPosts(r.data);
     } catch {}
     setLoading(false);
@@ -271,7 +271,7 @@ export default function Community() {
   const handleVote = async (postId, direction) => {
     if (!user) { handleLogin(); return; }
     try {
-      const r = await axios.post(`${API}/posts/${postId}/vote`, { vote: direction }, { withCredentials: true });
+      const r = await api.post(`/posts/${postId}/vote`, { vote: direction });
       loadPosts();
     } catch {}
   };
@@ -279,7 +279,7 @@ export default function Community() {
   const handleSave = async (postId) => {
     if (!user) { handleLogin(); return; }
     try {
-      const r = await axios.post(`${API}/posts/${postId}/save`, {}, { withCredentials: true });
+      const r = await api.post(`/posts/${postId}/save`, {});
       toast.success(r.data.saved ? 'Post saved!' : 'Post unsaved');
     } catch {}
   };
@@ -293,12 +293,12 @@ export default function Community() {
   const handleCreatePost = async () => {
     if (!newPost.caption.trim()) return;
     try {
-      await axios.post(`${API}/posts`, {
+      await api.post(`/posts`, {
         caption: newPost.caption,
         media_urls: newPost.media_url ? [newPost.media_url] : [],
         tagged_products: [],
         channel_id: newPost.channel_id || null,
-      }, { withCredentials: true });
+      });
       toast.success('Post published!');
       setNewPost({ caption: '', media_url: '', channel_id: '' });
       setPostDialogOpen(false);
@@ -309,7 +309,7 @@ export default function Community() {
   const handleCreateChannel = async () => {
     if (!newChannel.name.trim()) return;
     try {
-      await axios.post(`${API}/channels`, newChannel, { withCredentials: true });
+      await api.post(`/channels`, newChannel);
       toast.success('Channel created!');
       setNewChannel({ name: '', description: '' });
       setChannelDialogOpen(false);
@@ -429,14 +429,53 @@ export default function Community() {
                 />
                 <div className="flex items-center gap-2">
                   <ImageSquare size={18} className="text-neutral-500" />
-                  <input
-                    value={newPost.media_url}
-                    onChange={e => setNewPost(p => ({ ...p, media_url: e.target.value }))}
-                    placeholder="Image URL (optional)"
-                    className="flex-1 bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm focus:border-mg-red focus:outline-none"
-                    data-testid="post-media-input"
-                  />
+                  <label className="flex-1 cursor-pointer bg-mg-surface border border-white/10 px-4 py-3 text-mg-text font-body text-sm hover:border-mg-red transition-colors">
+                    {newPost.media_url ? (
+                      <span className="text-mg-orange truncate block">✓ Image attached — click to change</span>
+                    ) : uploadingImage ? (
+                      <span className="text-white/60">Uploading…</span>
+                    ) : (
+                      <span className="text-white/40">Click to upload an image (optional)</span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingImage}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 10 * 1024 * 1024) {
+                          toast.error('Image must be under 10 MB');
+                          return;
+                        }
+                        try {
+                          setUploadingImage(true);
+                          const url = await uploadToBucket('post-media', file, user?.user_id || 'anon');
+                          setNewPost(p => ({ ...p, media_url: url }));
+                          toast.success('Image uploaded');
+                        } catch (err) {
+                          console.error(err);
+                          toast.error('Upload failed: ' + (err.message || 'unknown'));
+                        } finally {
+                          setUploadingImage(false);
+                        }
+                      }}
+                      data-testid="post-media-input"
+                    />
+                  </label>
                 </div>
+                {newPost.media_url && (
+                  <div className="relative">
+                    <img src={newPost.media_url} alt="" className="w-full max-h-64 object-cover" />
+                    <button
+                      onClick={() => setNewPost(p => ({ ...p, media_url: '' }))}
+                      className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1 hover:bg-mg-red transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={handleCreatePost}
                   className="w-full bg-mg-red text-white font-headline font-bold text-xs tracking-widest uppercase py-4 hover:brightness-110"

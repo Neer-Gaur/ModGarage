@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from '@/components/ui/sonner';
 import Navbar from '@/components/Navbar';
@@ -18,18 +18,12 @@ import Admin from '@/pages/Admin';
 import '@/App.css';
 
 function AppRouter() {
-  const location = useLocation();
-
-  // CRITICAL: Check URL fragment for session_id synchronously during render
-  if (location.hash?.includes('session_id=')) {
-    return <AuthCallback />;
-  }
-
   return (
     <>
       <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/configurator" element={<Configurator />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

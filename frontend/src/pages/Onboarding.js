@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { CaretRight, Check } from '@phosphor-icons/react';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Onboarding() {
   const { user, setUser } = useAuth();
@@ -15,7 +13,7 @@ export default function Onboarding() {
   const [form, setForm] = useState({ make: '', model: '', year: '', variant: '', color: '' });
 
   useEffect(() => {
-    axios.get(`${API}/cars/makes`).then(r => setMakes(r.data.makes)).catch(() => {});
+    api.get(`/cars/makes`).then(r => setMakes(r.data.makes)).catch(() => {});
   }, []);
 
   const models = form.make ? makes[form.make] || [] : [];
@@ -23,10 +21,10 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     try {
-      await axios.post(`${API}/cars`, {
+      await api.post(`/cars`, {
         make: form.make, model: form.model,
         year: parseInt(form.year), variant: form.variant, color: form.color
-      }, { withCredentials: true });
+      });
       toast.success('Car profile created!');
       if (user) setUser({ ...user, has_cars: true });
       navigate('/dashboard', { replace: true });

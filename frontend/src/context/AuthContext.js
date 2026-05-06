@@ -1,43 +1,76 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import api from '@/lib/api';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const checkAuth = useCallback(async () => {
+  // Fetch our app profile (with role + has_cars) using the JWT
+  const fetchProfile = useCallback(async () => {
     try {
-      const resp = await axios.get(`${API}/auth/me`, { withCredentials: true });
+      const resp = await api.get('/auth/me');
       setUser(resp.data);
-    } catch {
+      return resp.data;
+    } catch (err) {
+      console.warn('Failed to fetch profile:', err?.response?.status);
       setUser(null);
-    } finally {
-      setLoading(false);
+      return null;
     }
   }, []);
 
+  // 1) Initial session check + auth state listener
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    if (window.location.hash?.includes('session_id=')) {
-      setLoading(false);
-      return;
-    }
-    checkAuth();
-  }, [checkAuth]);
+    let mounted = true;
 
-  const logout = async () => {
-    try {
-      await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
-    } catch { /* ignore */ }
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!mounted) return;
+      setSession(s);
+      if (s) await fetchProfile();
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
+      if (!mounted) return;
+      setSession(s);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        await fetchProfile();
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
+  }, [fetchProfile]);
+
+  const loginWithGoogle = useCallback(async () => {
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
+      },
+    });
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
-  };
+    setSession(null);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout, checkAuth }}>
+    <AuthContext.Provider
+      value={{ user, session, loading, setUser, loginWithGoogle, logout, refresh: fetchProfile }}
+    >
       {children}
     </AuthContext.Provider>
   );

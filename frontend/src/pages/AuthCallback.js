@@ -1,51 +1,45 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { supabase } from '@/lib/supabase';
+import api from '@/lib/api';
 
 export default function AuthCallback() {
-  const hasProcessed = useRef(false);
+  const ranRef = useRef(false);
   const navigate = useNavigate();
-  const { setUser } = useAuth();
 
   useEffect(() => {
-    if (hasProcessed.current) return;
-    hasProcessed.current = true;
+    if (ranRef.current) return;
+    ranRef.current = true;
 
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.substring(1));
-    const sessionId = params.get('session_id');
-
-    if (!sessionId) {
-      navigate('/', { replace: true });
-      return;
-    }
-
-    const exchange = async () => {
+    const finishAuth = async () => {
+      // Supabase JS auto-handles ?code= or #access_token= via detectSessionInUrl,
+      // but we still wait briefly for it to settle.
+      let session = null;
+      for (let i = 0; i < 20; i++) {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        if (s) { session = s; break; }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      if (!session) {
+        navigate('/', { replace: true });
+        return;
+      }
       try {
-        const resp = await axios.post(
-          `${API}/auth/session`,
-          { session_id: sessionId },
-          { withCredentials: true }
-        );
+        const resp = await api.get('/auth/me');
         const userData = resp.data;
-        setUser(userData);
-
         if (userData.has_cars) {
           navigate('/dashboard', { replace: true, state: { user: userData } });
         } else {
           navigate('/onboarding', { replace: true, state: { user: userData } });
         }
       } catch (err) {
-        console.error('Auth exchange failed:', err);
+        console.error('Auth /me failed:', err);
         navigate('/', { replace: true });
       }
     };
 
-    exchange();
-  }, [navigate, setUser]);
+    finishAuth();
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-mg-dark flex items-center justify-center" data-testid="auth-callback">

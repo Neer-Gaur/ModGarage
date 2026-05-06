@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { X, Plus, Cube, CalendarBlank, Lightning, CaretRight } from '@phosphor-icons/react';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export default function Garage() {
@@ -16,13 +15,13 @@ export default function Garage() {
 
   const loadGarage = async () => {
     try {
-      const carsR = await axios.get(`${API}/cars`, { withCredentials: true });
+      const carsR = await api.get(`/cars`);
       setCars(carsR.data);
       const car = carsR.data.find(c => c.is_primary) || carsR.data[0];
       if (!car) { setLoading(false); return; }
       const [itemsR, totalR] = await Promise.all([
-        axios.get(`${API}/garage/${car.car_id}`, { withCredentials: true }),
-        axios.get(`${API}/garage/${car.car_id}/total`, { withCredentials: true }),
+        api.get(`/garage/${car.car_id}`),
+        api.get(`/garage/${car.car_id}/total`),
       ]);
       setItems(itemsR.data);
       setTotal(totalR.data);
@@ -34,7 +33,7 @@ export default function Garage() {
 
   const handleRemove = async (itemId) => {
     try {
-      await axios.delete(`${API}/garage/${itemId}`, { withCredentials: true });
+      await api.delete(`/garage/${itemId}`);
       toast.success('Removed from garage');
       loadGarage();
     } catch { toast.error('Failed to remove'); }

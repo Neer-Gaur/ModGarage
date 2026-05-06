@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
 import { Check, MapPin, Shield, CheckCircle } from '@phosphor-icons/react';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 const VEHICLE_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDAYikZvb3BeRCSNLaffn2P3sBCLulQJSvwLLY-09Y_6faS3aMPGYh1a9Tt-Q1L2vT5HDmtg0ModUuq5Rstyr_M4tLDoTeoGCL4sI3Qqv0kDJmNp-NDOORGPp0ZZ3ZTcwElEdDVyzASsW-NM6DO6ejheIRr5keWaApOdCvCB77foPk2OEpprVQhzwWb9lW2TaFNNuks-GurqVdVUEdv7Rp6nQGROXBW9VxgXDnOH-Y_gN_nif0yF38ylSdY2bc802lzVkYPfrZE1z8';
@@ -28,14 +27,14 @@ export default function Booking() {
   useEffect(() => {
     const load = async () => {
       try {
-        const carsR = await axios.get(`${API}/cars`, { withCredentials: true });
+        const carsR = await api.get(`/cars`);
         setCars(carsR.data);
         const car = carsR.data.find(c => c.is_primary) || carsR.data[0];
         if (!car) return;
         const [itemsR, totalR, slotsR] = await Promise.all([
-          axios.get(`${API}/garage/${car.car_id}`, { withCredentials: true }),
-          axios.get(`${API}/garage/${car.car_id}/total`, { withCredentials: true }),
-          axios.get(`${API}/slots`),
+          api.get(`/garage/${car.car_id}`),
+          api.get(`/garage/${car.car_id}/total`),
+          api.get(`/slots`),
         ]);
         setGarageItems(itemsR.data);
         setTotal(totalR.data);
@@ -58,11 +57,11 @@ export default function Booking() {
     if (!primaryCar || !selectedSlot || !address) return;
     setSubmitting(true);
     try {
-      const resp = await axios.post(`${API}/bookings`, {
+      const resp = await api.post(`/bookings`, {
         car_id: primaryCar.car_id,
         slot_id: selectedSlot.slot_id,
         pickup_address: address,
-      }, { withCredentials: true });
+      });
       setBooking(resp.data);
       setShowConfirmation(true);
       toast.success('Booking confirmed!');

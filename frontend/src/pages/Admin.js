@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 const STATUSES = ['pending', 'confirmed', 'picked_up', 'in_workshop', 'ready', 'delivered', 'cancelled'];
@@ -21,7 +20,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(`${API}/admin/bookings`, { withCredentials: true })
+    api.get(`/admin/bookings`)
       .then(r => setBookings(r.data))
       .catch(() => toast.error('Failed to load bookings'))
       .finally(() => setLoading(false));
@@ -29,7 +28,7 @@ export default function Admin() {
 
   const updateStatus = async (bookingId, status) => {
     try {
-      await axios.put(`${API}/admin/bookings/${bookingId}/status`, { status }, { withCredentials: true });
+      await api.put(`/admin/bookings/${bookingId}/status`, { status });
       setBookings(prev => prev.map(b => b.booking_id === bookingId ? { ...b, status } : b));
       toast.success('Status updated');
     } catch (err) {

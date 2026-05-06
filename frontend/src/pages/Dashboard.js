@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
+import api from '@/lib/api';
 import { Wrench, ShoppingCart, CalendarCheck, Users, ArrowRight, Car } from '@phosphor-icons/react';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -17,14 +15,14 @@ export default function Dashboard() {
     const load = async () => {
       try {
         const [carsR, bookingsR] = await Promise.all([
-          axios.get(`${API}/cars`, { withCredentials: true }),
-          axios.get(`${API}/bookings`, { withCredentials: true }),
+          api.get(`/cars`),
+          api.get(`/bookings`),
         ]);
         setCars(carsR.data);
         setBookings(bookingsR.data);
         if (carsR.data.length > 0) {
           const primary = carsR.data.find(c => c.is_primary) || carsR.data[0];
-          const garageR = await axios.get(`${API}/garage/${primary.car_id}`, { withCredentials: true });
+          const garageR = await api.get(`/garage/${primary.car_id}`);
           setGarageCount(garageR.data.length);
         }
       } catch {}

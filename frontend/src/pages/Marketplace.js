@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { MagnifyingGlass, Lightning } from '@phosphor-icons/react';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HERO_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuAuHmASfV8kIYZaf4gKPBtxH19QLPEJViWcnGe7N-lS_DwaZebDIMmOq5IrxJWUIJ5loQwYrCJLzeMhPJebPNGuItMNcmoHdu0pdv3W6LZr8AgTQbuYP87-d-fcizjDohWHHP0layNwt7hFYF2QCn2TW51Ulh0WSatGDbpT7FzN3Gl3s_syGfqeSKnNGsTJUi4DbcTwYFwVBJTQZsAaIK3SBueYyZ6lPAD2uu-4_Y8HjsDn7mkkDVt0ZnXrGDZasCpTehbEdOaapnM';
 
 const CATEGORIES = [
@@ -33,7 +32,7 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(`${API}/cars`, { withCredentials: true }).then(r => setCars(r.data)).catch(() => {});
+    api.get(`/cars`).then(r => setCars(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -41,7 +40,7 @@ export default function Marketplace() {
     const params = new URLSearchParams();
     if (category) params.set('category', category);
     if (search) params.set('search', search);
-    axios.get(`${API}/products?${params}`)
+    api.get(`/products?${params}`)
       .then(r => {
         let sorted = r.data;
         if (sort === 'price_low') sorted = [...sorted].sort((a, b) => a.price - b.price);
@@ -67,7 +66,7 @@ export default function Marketplace() {
       return;
     }
     try {
-      await axios.post(`${API}/garage`, { car_id: primaryCar.car_id, product_id: productId }, { withCredentials: true });
+      await api.post(`/garage`, { car_id: primaryCar.car_id, product_id: productId });
       toast.success('Added to Garage!');
     } catch {
       toast.error('Failed to add to garage');

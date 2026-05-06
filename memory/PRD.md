@@ -3,7 +3,13 @@
 ## Original Problem Statement
 Build ModGarage, a car modification platform with immersive scrollytelling homepage and service booking. Core requirements: GSAP ScrollTrigger scrollytelling homepage (40 frame images), user authentication, multi-step car profile onboarding, marketplace with "Add to Garage" functionality, virtual garage (cart), "Coming Soon" 3D configurator placeholder, full checkout flow for bookings (no payment processing yet), Instagram-style community feed.
 
-**Tech Stack**: React + FastAPI + MongoDB (adapted from Next.js/Supabase)
+**Tech Stack**: React + FastAPI + **Supabase (Postgres + Auth + Storage)**
+**Migration history**: Originally built on MongoDB + Emergent Google Auth. Migrated to Supabase in 2026-05-06 for:
+  - Native Postgres + RLS
+  - Supabase Auth with Google OAuth (works on own domain, no proxy)
+  - Supabase Storage for image uploads
+  - Production deployment: Backend on Render free tier + Frontend on Hostinger Business + DB on Supabase free tier
+  - Domain: modsyndicate.in
 
 ## User Personas
 - **Car Enthusiast**: Browses marketplace, adds parts to garage, books installation

@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/lib/api';
 import { Car, CalendarCheck, User } from '@phosphor-icons/react';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 const statusColors = {
@@ -20,8 +19,8 @@ export default function Profile() {
 
   useEffect(() => {
     Promise.all([
-      axios.get(`${API}/cars`, { withCredentials: true }),
-      axios.get(`${API}/bookings`, { withCredentials: true }),
+      api.get(`/cars`),
+      api.get(`/bookings`),
     ]).then(([c, b]) => {
       setCars(c.data);
       setBookings(b.data);
@@ -30,7 +29,7 @@ export default function Profile() {
 
   const handleCancelBooking = async (bookingId) => {
     try {
-      await axios.put(`${API}/bookings/${bookingId}/cancel`, {}, { withCredentials: true });
+      await api.put(`/bookings/${bookingId}/cancel`, {});
       setBookings(prev => prev.map(b => b.booking_id === bookingId ? { ...b, status: 'cancelled' } : b));
     } catch {}
   };

@@ -5,14 +5,13 @@ import { User, Gauge, SignOut, GearSix, List } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, loginWithGoogle } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogin = () => {
-    const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    loginWithGoogle();
   };
 
   const navLinks = [

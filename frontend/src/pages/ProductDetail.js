@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Heart, Star, Truck, ShieldCheck, CaretRight } from '@phosphor-icons/react';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatINR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export default function ProductDetail() {
@@ -19,9 +18,9 @@ export default function ProductDetail() {
 
   useEffect(() => {
     Promise.all([
-      axios.get(`${API}/products/${slug}`),
-      axios.get(`${API}/cars`, { withCredentials: true }).catch(() => ({ data: [] })),
-      axios.get(`${API}/products?limit=3`).catch(() => ({ data: [] })),
+      api.get(`/products/${slug}`),
+      api.get(`/cars`).catch(() => ({ data: [] })),
+      api.get(`/products?limit=3`).catch(() => ({ data: [] })),
     ]).then(([pR, cR, rR]) => {
       setProduct(pR.data);
       setCars(cR.data);
@@ -34,7 +33,7 @@ export default function ProductDetail() {
     const car = cars.find(c => c.is_primary) || cars[0];
     if (!car) { toast.error('Set up your car first'); navigate('/onboarding'); return; }
     try {
-      await axios.post(`${API}/garage`, { car_id: car.car_id, product_id: product.product_id }, { withCredentials: true });
+      await api.post(`/garage`, { car_id: car.car_id, product_id: product.product_id });
       toast.success('Added to Garage!');
     } catch { toast.error('Failed to add'); }
   };
@@ -43,7 +42,7 @@ export default function ProductDetail() {
     const car = cars.find(c => c.is_primary) || cars[0];
     if (!car) { toast.error('Set up your car first'); return; }
     try {
-      await axios.post(`${API}/garage`, { car_id: car.car_id, product_id: productId }, { withCredentials: true });
+      await api.post(`/garage`, { car_id: car.car_id, product_id: productId });
       toast.success('Added to Garage!');
     } catch { toast.error('Failed to add'); }
   };
