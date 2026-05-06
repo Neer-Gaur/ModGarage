@@ -9,7 +9,6 @@ gsap.registerPlugin(ScrollTrigger);
 
 const FRAME_COUNT = 40;
 const frameSrc = (i) => `/scroll-images/ezgif-frame-${String(i + 1).padStart(3, '0')}-Picsart-AiImageEnhancer.jpg`;
-const SCROLL_WORDS = ['WRAPS', 'RIMS', 'TYRES', 'HOODS', 'LAMPS'];
 
 const IMAGES = {
   parts: 'https://lh3.googleusercontent.com/aida-public/AB6AXuADWkNeIc0eFDevRSynE2PxfNTpS6ZFsriyT8TCjPkSIvrI1n-nLwCB5EYPaHsFq26h1LoLY24eC5Uke66b46WvoGtc8mk1DwFTocWUuvpgssv7HS9_6mewYLrVgnwGfoY1CzBJfZfHHbSAn8h4WmQZDQsGspgajQI61UNreDFFeT867NBtOctMMYXkAmYDz_dya-ATP1hhqVwE-ZgQSW80pHKyWtV0G9GM48EmLrlUVLE7c4R8brAUvwUorbBe5Z9ulwpbkxgsPCw',
@@ -114,47 +113,19 @@ export default function LandingPage() {
     );
     tl.to('.red-pulse-overlay', { opacity: 0, duration: 0.1 }, 0.85);
 
-    tl.to('.scroll-title', { opacity: 0, scale: 0.85, duration: 0.08, ease: 'power2.in' }, 0.06);
-    tl.to('.scroll-arrow', { opacity: 0, duration: 0.05 }, 0.04);
+    tl.to('.scroll-title', { opacity: 0, scale: 0.85, duration: 0.15, ease: 'power2.in' }, 0.05);
+    tl.to('.scroll-arrow', { opacity: 0, duration: 0.08 }, 0.03);
 
-    const wordStart = 0.12;
-    const wordDur = 0.10;
-    const wordGap = 0.04;
-
-    SCROLL_WORDS.forEach((word, i) => {
-      const pos = wordStart + i * (wordDur + wordGap);
-      const sel = `.scroll-word-${word.toLowerCase()}`;
-
-      tl.fromTo(sel,
-        { opacity: 0, scale: 2, y: 40 },
-        { opacity: 1, scale: 1, y: 0, duration: wordDur * 0.45, ease: 'back.out(2.5)' },
-        pos
-      );
-      tl.fromTo('.word-flash',
-        { opacity: 0 },
-        { opacity: 0.2, duration: wordDur * 0.15, ease: 'power2.out' },
-        pos
-      );
-      tl.to('.word-flash',
-        { opacity: 0, duration: wordDur * 0.3 },
-        pos + wordDur * 0.15
-      );
-      tl.to(sel,
-        { opacity: 0, scale: 0.5, y: -30, duration: wordDur * 0.45, ease: 'power3.in' },
-        pos + wordDur * 0.55
-      );
-    });
-
-    const finalPos = wordStart + SCROLL_WORDS.length * (wordDur + wordGap) + 0.02;
-    tl.fromTo('.scroll-final',
-      { opacity: 0, scale: 1.4 },
-      { opacity: 1, scale: 1, duration: 0.12, ease: 'back.out(2)' },
-      finalPos
+    // Single headline appears at mid-scroll
+    tl.fromTo('.scroll-headline',
+      { opacity: 0, y: 60 },
+      { opacity: 1, y: 0, duration: 0.2, ease: 'power3.out' },
+      0.4
     );
-    tl.fromTo('.scroll-final-cta',
-      { opacity: 0, y: 40 },
-      { opacity: 1, y: 0, duration: 0.1, ease: 'power2.out' },
-      finalPos + 0.08
+    tl.fromTo('.scroll-headline-cta',
+      { opacity: 0, y: 30 },
+      { opacity: 1, y: 0, duration: 0.15, ease: 'power2.out' },
+      0.55
     );
 
     const handleResize = () => {
@@ -204,34 +175,19 @@ export default function LandingPage() {
           <div className="w-[1px] h-12 bg-gradient-to-b from-mg-red to-transparent" />
         </div>
 
-        {/* Bouncing word overlays */}
-        {SCROLL_WORDS.map((word) => (
-          <div
-            key={word}
-            className={`scroll-word-${word.toLowerCase()} absolute inset-0 flex items-center justify-center z-10 opacity-0 pointer-events-none`}
-          >
-            <span className="font-headline text-[8rem] md:text-[12rem] lg:text-[16rem] leading-none text-white uppercase tracking-wider drop-shadow-[0_0_60px_rgba(250,93,0,0.3)] font-black">
-              {word}
-            </span>
-          </div>
-        ))}
-
-        {/* Final statement */}
-        <div className="scroll-final absolute inset-0 flex items-center justify-center z-10 opacity-0">
+        {/* Single headline — appears mid-scroll */}
+        <div className="scroll-headline absolute inset-0 flex items-center justify-center z-10 opacity-0 pointer-events-none">
           <div className="text-center">
-            <span className="font-headline text-5xl md:text-[5rem] lg:text-[7rem] leading-[0.9] text-white/60 uppercase tracking-wider block font-black">
-              We Got
-            </span>
-            <span className="font-headline text-6xl md:text-[7rem] lg:text-[10rem] leading-[0.85] text-mg-red uppercase tracking-wider block glow-red-text font-black">
-              Everything
-            </span>
-            <div className="scroll-final-cta opacity-0 mt-10">
+            <h2 className="font-headline text-5xl md:text-[5rem] lg:text-[7rem] leading-[0.9] text-white uppercase tracking-tighter font-black">
+              From Vision to <span className="text-mg-red text-glow">Precision.</span>
+            </h2>
+            <div className="scroll-headline-cta opacity-0 mt-10 pointer-events-auto">
               <button
                 onClick={handleGetStarted}
                 className="bg-mg-red text-white font-headline text-lg font-bold tracking-[0.1em] uppercase px-12 py-5 hover:brightness-110 transition-all shadow-[0_0_30px_rgba(250,93,0,0.3)] active:scale-95"
                 data-testid="hero-get-started-btn"
               >
-                {user ? 'Go to Dashboard' : 'Start Building'}
+                {user ? 'Go to Dashboard' : 'Build Now'}
               </button>
             </div>
           </div>
