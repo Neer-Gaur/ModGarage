@@ -8,7 +8,7 @@ import { CheckCircle, ShieldCheck, CaretLeft, CaretRight } from '@phosphor-icons
 gsap.registerPlugin(ScrollTrigger);
 
 const FRAME_COUNT = 40;
-const frameSrc = (i) => `/scroll-images/ezgif-frame-${String(i + 1).padStart(3, '0')}.jpg`;
+const frameSrc = (i) => `/scroll-images/ezgif-frame-${String(i + 1).padStart(3, '0')}-Picsart-AiImageEnhancer.jpg`;
 const SCROLL_WORDS = ['WRAPS', 'RIMS', 'TYRES', 'HOODS', 'LAMPS'];
 
 const IMAGES = {
