@@ -442,6 +442,10 @@ async def create_booking(
     slot_time = f"{slot['start_time']} - {slot['end_time']}"
 
     import json as _json
+    from datetime import date as date_type
+    # Convert slot_date string to date object
+    slot_date_obj = date_type.fromisoformat(slot["slot_date"]) if isinstance(slot["slot_date"], str) else slot["slot_date"]
+    
     rows = await db.execute(
         text("""
             INSERT INTO bookings
@@ -459,7 +463,7 @@ async def create_booking(
             "code": booking_code, "uid": user["id"], "cid": booking.car_id, "sid": booking.slot_id,
             "addr": booking.pickup_address, "parts": total_parts, "labour": total_labour,
             "total": total, "items": _json.dumps(booking_items),
-            "sdate": slot["slot_date"], "stime": slot_time,
+            "sdate": slot_date_obj, "stime": slot_time,
         },
     )
     new_booking = _one(rows)
@@ -862,13 +866,14 @@ async def add_comment(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Handle optional parent_comment_id
+    parent_id = comment.parent_comment_id if comment.parent_comment_id else None
     rows = await db.execute(
         text("""INSERT INTO post_comments (post_id, user_id, content, parent_comment_id)
-                VALUES (:p, :u, :c,
-                        CASE WHEN :pc IS NULL OR :pc = '' THEN NULL ELSE CAST(:pc AS UUID) END)
+                VALUES (:p, :u, :c, CAST(:pc AS UUID))
                 RETURNING id::text AS comment_id, post_id::text, user_id::text,
                           content, parent_comment_id::text, created_at"""),
-        {"p": post_id, "u": user["id"], "c": comment.content, "pc": comment.parent_comment_id},
+        {"p": post_id, "u": user["id"], "c": comment.content, "pc": parent_id},
     )
     new_comment = _one(rows)
     await db.execute(
@@ -924,12 +929,16 @@ async def create_slot(
     admin: dict = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    from datetime import date as date_type
+    # Convert date string to date object
+    slot_date_obj = date_type.fromisoformat(slot.date) if isinstance(slot.date, str) else slot.date
+    
     rows = await db.execute(
         text("""INSERT INTO booking_slots (date, start_time, end_time, capacity, created_by)
                 VALUES (:d, :s, :e, :c, :u)
                 RETURNING id::text AS slot_id, date::text, start_time, end_time,
                           capacity, booked_count, is_available"""),
-        {"d": slot.date, "s": slot.start_time, "e": slot.end_time,
+        {"d": slot_date_obj, "s": slot.start_time, "e": slot.end_time,
          "c": slot.capacity, "u": admin["id"]},
     )
     await db.commit()

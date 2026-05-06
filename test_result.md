@@ -101,3 +101,190 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Migrate ModSyndicate (formerly ModGarage) from MongoDB + Emergent Google Auth to
+  Supabase (Postgres + Auth + Storage). Frontend will be hosted on Hostinger Business
+  (modsyndicate.in), backend on Render free tier, DB on Supabase free tier.
+
+  Migration scope:
+  - Replace MongoDB driver (motor) with SQLAlchemy + asyncpg using Supabase Transaction Pooler
+  - Replace Emergent session-cookie auth with Supabase JWT bearer auth
+  - Replace URL-based image inputs with direct Supabase Storage uploads
+  - Single SQL setup script for tables, RLS, buckets, seed data
+
+backend:
+  - task: "Supabase DB connectivity (Transaction Pooler)"
+    implemented: true
+    working: true
+    file: "backend/database.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "DATABASE_URL with URL-encoded password works. /api/health returns db:true. asyncpg statement_cache_size=0 set per Supabase pooler requirements."
+
+  - task: "Public read-only endpoints (no auth)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Verified via curl: /api/products → 15 items, /api/channels → 8, /api/slots → 28, /api/posts → 4, /api/cars/makes returns full dict."
+
+  - task: "JWT auth — protected endpoints reject unauthenticated requests"
+    implemented: true
+    working: true
+    file: "backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "/api/cars without token returns 401. Need testing agent to verify with valid Supabase JWT that all auth-protected endpoints work and that the auto-create-profile logic in _ensure_profile fires correctly."
+
+  - task: "Cars CRUD (auth-required)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Endpoints implemented: POST /api/cars (create), GET /api/cars (list), DELETE /api/cars/{id}. is_primary auto-set on first car. Need automated testing with a JWT."
+
+  - task: "Garage operations (auth-required)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/garage uses ON CONFLICT to merge duplicate adds. GET /api/garage/{car_id} joins products via row_to_json. GET total uses COALESCE+SUM. Need testing with real auth."
+
+  - task: "Booking flow (slot lock + create + cancel)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/bookings uses SELECT FOR UPDATE on slot, computes totals from garage, increments booked_count, clears garage. Booking code MS-YYYY-NNNN. Cancel decrements booked_count. Need testing."
+
+  - task: "Community: posts, votes, likes, comments, save"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/posts with optional channel_id/car_id (nullable casts). Vote toggle logic with delta math on upvotes/downvotes/vote_count. Likes and saves are simple toggles. Comments support parent_comment_id for threading. tagged_products returns enriched product details."
+
+  - task: "Admin endpoints + role gate"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "/api/admin/init promotes first user to admin. get_current_admin guard checks role='admin'. Endpoints: PUT /api/admin/bookings/{id}/status, POST /api/admin/slots, GET /api/admin/bookings."
+
+frontend:
+  - task: "Supabase Auth integration (Google OAuth)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/context/AuthContext.js, frontend/src/lib/supabase.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Replaced Emergent auth with @supabase/supabase-js. PKCE flow, persistSession=true. AuthContext listens to onAuthStateChange and refetches /api/auth/me on SIGNED_IN/TOKEN_REFRESHED. Cannot test without Google OAuth provider configured by user."
+
+  - task: "Axios JWT bearer interceptor"
+    implemented: true
+    working: true
+    file: "frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Single axios instance with request interceptor that pulls fresh access_token from Supabase session. All 9 page files refactored to use this helper."
+
+  - task: "Image upload to Supabase Storage (Community posts)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/Community.js, frontend/src/lib/supabase.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "uploadToBucket('post-media', file, userId) helper. Replaces text URL input with file picker. 10MB limit, content-type preserved. Cannot test without authenticated user."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 0
+  run_ui: false
+  migration: "MongoDB → Supabase Postgres complete"
+
+test_plan:
+  current_focus:
+    - "JWT auth — protected endpoints reject unauthenticated requests"
+    - "Cars CRUD (auth-required)"
+    - "Garage operations (auth-required)"
+    - "Booking flow (slot lock + create + cancel)"
+    - "Community: posts, votes, likes, comments, save"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+  notes: |
+    Backend testing approach: Generate a Supabase JWT for a test user via the
+    Supabase Admin API (using the service_role key) so the testing agent can
+    exercise auth-protected endpoints. Or instruct the testing agent to:
+    1. Use the service_role key to mint an admin user via the auth.admin.createUser API
+    2. Use the user's access_token in subsequent /api/* calls
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Migration from MongoDB → Supabase Postgres is complete. Database URL with
+        URL-encoded password works (/api/health returns db:true). All 15 products,
+        8 channels, 28 slots, 4 posts seeded successfully. Public endpoints verified
+        via curl. Auth-protected endpoints correctly return 401 without a token.
+
+        Need testing agent to:
+        1. Create a test user via Supabase Auth admin API (using SUPABASE_SERVICE_KEY)
+        2. Get an access_token for that user
+        3. Test all auth-protected endpoints (cars, garage, bookings, community)
+        4. Verify the auto-create-profile trigger fires on first /api/auth/me
+        5. Confirm vote toggle math is correct (upvote → switch to downvote → remove)
+
+        Env vars are set in /app/backend/.env. SUPABASE_URL and SUPABASE_SERVICE_KEY
+        are available for the testing agent to mint test JWTs.

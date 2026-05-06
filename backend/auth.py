@@ -9,18 +9,22 @@ from fastapi import Request, HTTPException, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
+from jwt import PyJWKClient
 
 from database import get_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET')
-if not SUPABASE_JWT_SECRET:
-    raise RuntimeError("SUPABASE_JWT_SECRET is not set")
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+if not SUPABASE_URL:
+    raise RuntimeError("SUPABASE_URL is not set")
+
+# Supabase uses ES256 (asymmetric) JWTs, so we need to fetch the public key from JWKS
+JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+jwks_client = PyJWKClient(JWKS_URL)
 
 JWT_AUDIENCE = "authenticated"
-JWT_ALGO = "HS256"
 
 
 def _extract_token(request: Request) -> Optional[str]:
@@ -34,10 +38,14 @@ def _extract_token(request: Request) -> Optional[str]:
 
 def decode_jwt(token: str) -> dict:
     try:
+        # Get the signing key from JWKS
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
+        # Decode and verify the token
         return jwt.decode(
             token,
-            SUPABASE_JWT_SECRET,
-            algorithms=[JWT_ALGO],
+            signing_key.key,
+            algorithms=["ES256"],
             audience=JWT_AUDIENCE,
             options={"verify_aud": True},
         )
