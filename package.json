@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-  "node": ">=18.0.0"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "postinstall": "cd frontend && npm install --legacy-peer-deps",
     "start": "cd frontend && npm start",
-    "build": "cd frontend && npm run build"
+    "build": "cd frontend && npm install ajv-formats && npm run build"
   },
   "dependencies": {
     "react": "^18.2.0",
