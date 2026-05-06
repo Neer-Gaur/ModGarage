@@ -36,7 +36,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="onboarding-page">
+    <div className="min-h-screen bg-mg-dark pt-8 pb-12 px-6" data-testid="onboarding-page">
       <div className="max-w-2xl mx-auto">
         <div className="mb-12">
           <p className="font-mono text-xs tracking-[0.3em] text-mg-red uppercase mb-3">Setup</p>

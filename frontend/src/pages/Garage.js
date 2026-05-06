@@ -43,14 +43,14 @@ export default function Garage() {
   const primaryCar = cars.find(c => c.is_primary) || cars[0];
 
   if (loading) return (
-    <div className="min-h-screen bg-mg-surface pt-24 flex items-center justify-center">
+    <div className="min-h-screen bg-mg-surface pt-8 flex items-center justify-center">
       <div className="w-10 h-10 border-2 border-mg-red border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
     <div className="min-h-screen bg-mg-surface" data-testid="garage-page">
-      <main className="pt-32 pb-24 px-8 max-w-7xl mx-auto">
+      <main className="pt-12 pb-24 px-8 max-w-7xl mx-auto">
         {/* Header */}
         <header className="mb-16">
           <div className="flex items-end justify-between border-b border-white/10 pb-8">

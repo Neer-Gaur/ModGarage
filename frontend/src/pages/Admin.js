@@ -38,13 +38,13 @@ export default function Admin() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-mg-dark pt-24 flex items-center justify-center">
+    <div className="min-h-screen bg-mg-dark pt-8 flex items-center justify-center">
       <div className="w-10 h-10 border-2 border-mg-red border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="admin-page">
+    <div className="min-h-screen bg-mg-dark pt-8 pb-12 px-6" data-testid="admin-page">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <p className="font-mono text-xs tracking-[0.3em] text-mg-red uppercase mb-3">Control Room</p>

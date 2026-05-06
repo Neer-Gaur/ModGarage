@@ -151,7 +151,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-mg-surface/30 to-mg-surface/30 z-[1]" />
 
         <div className="red-pulse-overlay absolute inset-0 z-[2] opacity-0" style={{
-          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(250, 93, 0, 0.1) 70%, rgba(250, 93, 0, 0.2) 100%)'
+          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(220, 0, 0, 0.1) 70%, rgba(220, 0, 0, 0.2) 100%)'
         }} />
         <div className="word-flash absolute inset-0 z-[2] opacity-0 bg-mg-red/10 pointer-events-none" />
         <div className="grain-overlay z-[3]" />
@@ -159,12 +159,12 @@ export default function LandingPage() {
         {/* Title overlay */}
         <div className="scroll-title absolute inset-0 flex items-center justify-center z-10">
           <div className="text-center px-4">
-            <p className="font-label text-xs tracking-[0.4em] text-mg-red uppercase mb-6 font-semibold">Premium Car Modifications</p>
-            <h1 className="font-headline text-7xl md:text-[9rem] lg:text-[11rem] leading-[0.85] uppercase text-white tracking-tighter font-black">
-              MOD<span className="text-mg-red text-glow">GARAGE</span>
+            <img src="/logo.png" alt="Mod Syndicate" className="h-28 md:h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(220,0,0,0.3)]" />
+            <h1 className="font-headline text-5xl md:text-[7rem] lg:text-[9rem] leading-[0.85] uppercase text-white tracking-tighter font-black">
+              MOD <span className="text-mg-red text-glow">SYNDICATE</span>
             </h1>
             <p className="mt-6 text-base md:text-lg text-white/40 font-body font-light max-w-md mx-auto tracking-wide">
-              Precision engineering meets absolute performance.
+              For The Builders.
             </p>
           </div>
         </div>
@@ -184,7 +184,7 @@ export default function LandingPage() {
             <div className="scroll-headline-cta opacity-0 mt-10 pointer-events-auto">
               <button
                 onClick={handleGetStarted}
-                className="bg-mg-red text-white font-headline text-lg font-bold tracking-[0.1em] uppercase px-12 py-5 hover:brightness-110 transition-all shadow-[0_0_30px_rgba(250,93,0,0.3)] active:scale-95"
+                className="btn-glass text-white font-headline text-lg font-bold tracking-[0.1em] uppercase px-14 py-5 hover:shadow-[0_0_40px_rgba(220,0,0,0.4)] active:scale-95 transition-all"
                 data-testid="hero-get-started-btn"
               >
                 {user ? 'Go to Dashboard' : 'Build Now'}
@@ -342,14 +342,14 @@ export default function LandingPage() {
             <div className="flex flex-col md:flex-row gap-6 justify-center">
               <button
                 onClick={() => user ? navigate('/configurator') : handleGetStarted()}
-                className="bg-mg-red text-white font-headline font-black text-lg px-16 py-6 uppercase hover:brightness-110 transition-all active:scale-95"
+                className="btn-glass text-white font-headline font-black text-lg px-16 py-6 uppercase active:scale-95"
                 data-testid="build-config-btn"
               >
                 Build Your Config
               </button>
               <button
                 onClick={() => user ? navigate('/marketplace') : handleGetStarted()}
-                className="bg-mg-surface-bright text-white font-headline font-black text-lg px-16 py-6 uppercase border border-neutral-700 hover:bg-neutral-800 transition-all active:scale-95"
+                className="btn-glass-outline text-white font-headline font-black text-lg px-16 py-6 uppercase active:scale-95"
                 data-testid="view-parts-btn"
               >
                 View Parts
@@ -360,14 +360,17 @@ export default function LandingPage() {
       </main>
 
       {/* ======================= FOOTER ======================= */}
-      <footer className="bg-neutral-950 w-full border-t border-neutral-800 grid grid-cols-1 md:grid-cols-3 gap-8 px-12 py-16" data-testid="footer">
+      <footer className="bg-mg-dark w-full border-t border-white/5 grid grid-cols-1 md:grid-cols-3 gap-8 px-12 py-16" data-testid="footer">
         <div className="flex flex-col gap-6">
-          <div className="text-lg font-bold text-mg-red font-headline uppercase tracking-tighter">ModGarage</div>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Mod Syndicate" className="h-10 w-auto" />
+            <span className="text-lg font-bold text-mg-red font-headline uppercase tracking-tighter">Mod Syndicate</span>
+          </div>
           <p className="text-neutral-500 font-body text-sm max-w-xs leading-relaxed">
             Dedicated to the pursuit of mechanical perfection. Engineered for those who demand more from their machines.
           </p>
           <div className="text-mg-red text-sm font-body uppercase tracking-widest mt-4">
-            2026 ModGarage. Precision Engineering.
+            2026 Mod Syndicate. For The Builders.
           </div>
         </div>
         <div className="flex flex-col gap-4">

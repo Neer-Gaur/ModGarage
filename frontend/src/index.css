@@ -8,27 +8,27 @@
 
 @layer base {
     :root {
-        --background: 0 0% 7.5%;
-        --foreground: 20 4% 89%;
-        --card: 0 0% 13%;
-        --card-foreground: 20 4% 89%;
-        --popover: 0 0% 13%;
-        --popover-foreground: 20 4% 89%;
-        --primary: 22 100% 49%;
+        --background: 0 0% 6.7%;
+        --foreground: 0 0% 91%;
+        --card: 0 0% 10%;
+        --card-foreground: 0 0% 91%;
+        --popover: 0 0% 10%;
+        --popover-foreground: 0 0% 91%;
+        --primary: 0 100% 43%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 17%;
-        --secondary-foreground: 20 4% 89%;
-        --muted: 0 0% 17%;
+        --secondary: 0 0% 15%;
+        --secondary-foreground: 0 0% 91%;
+        --muted: 0 0% 15%;
         --muted-foreground: 0 0% 50%;
-        --accent: 0 0% 17%;
-        --accent-foreground: 20 4% 89%;
+        --accent: 0 0% 15%;
+        --accent-foreground: 0 0% 91%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 20%;
-        --input: 0 0% 13%;
-        --ring: 22 100% 49%;
+        --border: 0 0% 18%;
+        --input: 0 0% 10%;
+        --ring: 0 100% 43%;
         --radius: 0rem;
-        --chart-1: 22 100% 49%;
+        --chart-1: 0 100% 43%;
         --chart-2: 187 100% 48%;
         --chart-3: 144 100% 50%;
         --chart-4: 0 0% 60%;
@@ -56,25 +56,16 @@
     [data-debug-wrapper="true"] {
         display: contents !important;
     }
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit; margin-right: inherit;
-        margin-top: inherit; margin-bottom: inherit;
-        padding-left: inherit; padding-right: inherit;
-        padding-top: inherit; padding-bottom: inherit;
-        column-gap: inherit; row-gap: inherit; gap: inherit;
-        border-left-width: inherit; border-right-width: inherit;
-        border-top-width: inherit; border-bottom-width: inherit;
-    }
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #131313; }
-::-webkit-scrollbar-thumb { background: #fa5d00; border-radius: 0; }
-::-webkit-scrollbar-thumb:hover { background: #ffb599; }
+::-webkit-scrollbar-track { background: #111111; }
+::-webkit-scrollbar-thumb { background: #DC0000; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #FF3333; }
 
 /* Selection */
 ::selection {
-    background: rgba(250, 93, 0, 0.3);
+    background: rgba(220, 0, 0, 0.3);
     color: #fff;
 }

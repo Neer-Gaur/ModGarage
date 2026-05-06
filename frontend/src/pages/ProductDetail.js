@@ -49,7 +49,7 @@ export default function ProductDetail() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-mg-surface pt-24 flex items-center justify-center">
+    <div className="min-h-screen bg-mg-surface pt-8 flex items-center justify-center">
       <div className="w-10 h-10 border-2 border-mg-red border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -59,7 +59,7 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-mg-surface" data-testid="product-detail-page">
-      <main className="pt-24 pb-20 max-w-7xl mx-auto px-6">
+      <main className="pt-8 pb-20 max-w-7xl mx-auto px-6">
         {/* Breadcrumbs */}
         <nav className="mb-8 flex items-center gap-2 text-xs font-label uppercase tracking-widest text-neutral-500" data-testid="breadcrumbs">
           <Link to="/marketplace" className="hover:text-mg-orange transition-colors">Marketplace</Link>

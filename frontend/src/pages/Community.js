@@ -319,7 +319,7 @@ export default function Community() {
 
   return (
     <div className="min-h-screen bg-mg-surface" data-testid="community-page">
-      <main className="pt-28 pb-24 max-w-6xl mx-auto px-4 md:px-8">
+      <main className="pt-8 pb-24 max-w-6xl mx-auto px-4 md:px-8">
 
         {/* Header */}
         <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">

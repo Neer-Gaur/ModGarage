@@ -74,7 +74,7 @@ export default function Booking() {
 
   return (
     <div className="min-h-screen bg-mg-surface" data-testid="booking-page">
-      <main className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
+      <main className="pt-12 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
         <div className="mb-12">
           <h1 className="font-headline text-5xl md:text-7xl font-bold uppercase tracking-tighter text-mg-text">
             Service <span className="text-mg-red">Protocol</span>

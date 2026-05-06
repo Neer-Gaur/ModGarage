@@ -1,17 +1,15 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Wrench, ShoppingCart, Users, User, Gauge, CaretDown, SignOut, GearSix, List } from '@phosphor-icons/react';
+import { User, Gauge, SignOut, GearSix, List } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isLanding = location.pathname === '/';
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
   const handleLogin = () => {
     const redirectUrl = window.location.origin + '/dashboard';
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
@@ -32,19 +30,22 @@ export default function Navbar() {
 
   return (
     <nav
-      className="fixed top-0 w-full z-50 glass flex justify-between items-center px-8 h-20"
+      className="relative w-full z-50 bg-mg-dark border-b border-white/5 flex justify-between items-center px-8 h-20"
       data-testid="navbar"
     >
       <Link
         to={user ? '/dashboard' : '/'}
-        className="text-2xl font-black text-mg-red tracking-tighter uppercase font-headline"
+        className="flex items-center gap-3"
         data-testid="nav-logo"
       >
-        ModGarage
+        <img src="/logo.png" alt="Mod Syndicate" className="h-12 w-auto" />
+        <span className="text-xl font-black text-mg-red tracking-tighter uppercase font-headline hidden sm:inline">
+          Mod Syndicate
+        </span>
       </Link>
 
       {/* Desktop nav links */}
-      <div className="hidden md:flex items-center space-x-12 font-headline uppercase tracking-wider text-sm">
+      <div className="hidden md:flex items-center space-x-10 font-headline uppercase tracking-wider text-sm">
         {navLinks.map((link) => (
           <Link
             key={link.href}
@@ -52,7 +53,7 @@ export default function Navbar() {
             onClick={(e) => handleNavClick(e, link)}
             className={`transition-colors duration-300 ${
               location.pathname === link.href
-                ? 'text-mg-orange border-b-2 border-mg-red pb-1'
+                ? 'text-mg-red border-b-2 border-mg-red pb-1'
                 : 'text-neutral-400 hover:text-mg-orange'
             }`}
             data-testid={`nav-${link.label.toLowerCase().replace(/\s/g, '-')}`}
@@ -82,9 +83,6 @@ export default function Navbar() {
               <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer font-headline uppercase text-xs tracking-wider" data-testid="nav-profile">
                 <User size={16} className="mr-2" /> Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/garage')} className="cursor-pointer md:hidden font-headline uppercase text-xs tracking-wider">
-                <ShoppingCart size={16} className="mr-2" /> My Garage
-              </DropdownMenuItem>
               {user.role === 'admin' && (
                 <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer font-headline uppercase text-xs tracking-wider" data-testid="nav-admin">
                   <GearSix size={16} className="mr-2" /> Admin
@@ -99,10 +97,10 @@ export default function Navbar() {
         ) : (
           <button
             onClick={handleLogin}
-            className="text-mg-orange hover:text-mg-red transition-colors active:scale-95"
+            className="btn-glass text-mg-orange hover:text-white px-4 py-2 font-headline font-bold text-xs uppercase tracking-widest"
             data-testid="login-btn"
           >
-            <User size={24} weight="bold" />
+            Sign In
           </button>
         )}
 
@@ -114,7 +112,7 @@ export default function Navbar() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="absolute top-20 left-0 right-0 bg-neutral-950/95 backdrop-blur-xl border-b border-neutral-800 md:hidden">
+        <div className="absolute top-20 left-0 right-0 bg-mg-dark/95 backdrop-blur-xl border-b border-white/5 md:hidden z-50">
           <div className="flex flex-col py-4 px-8 gap-4">
             {navLinks.map((link) => (
               <Link
@@ -122,7 +120,7 @@ export default function Navbar() {
                 to={link.href}
                 onClick={(e) => { handleNavClick(e, link); setMobileOpen(false); }}
                 className={`font-headline uppercase tracking-wider text-sm py-2 transition-colors ${
-                  location.pathname === link.href ? 'text-mg-orange' : 'text-neutral-400 hover:text-mg-orange'
+                  location.pathname === link.href ? 'text-mg-red' : 'text-neutral-400 hover:text-mg-orange'
                 }`}
               >
                 {link.label}
@@ -131,9 +129,9 @@ export default function Navbar() {
             {!user && (
               <button
                 onClick={() => { setMobileOpen(false); handleLogin(); }}
-                className="bg-mg-red text-white font-headline font-bold text-sm uppercase tracking-wider px-6 py-3 mt-2"
+                className="btn-glass text-white font-headline font-bold text-sm uppercase tracking-wider px-6 py-3 mt-2"
               >
-                Get Started
+                Sign In
               </button>
             )}
           </div>

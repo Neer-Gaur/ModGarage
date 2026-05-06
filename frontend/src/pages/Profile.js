@@ -36,7 +36,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="profile-page">
+    <div className="min-h-screen bg-mg-dark pt-8 pb-12 px-6" data-testid="profile-page">
       <div className="max-w-4xl mx-auto">
         {/* User Info */}
         <div className="flex items-center gap-6 mb-12">

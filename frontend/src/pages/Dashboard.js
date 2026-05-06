@@ -48,7 +48,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-mg-dark pt-24 pb-12 px-6" data-testid="dashboard-page">
+    <div className="min-h-screen bg-mg-dark pt-8 pb-12 px-6" data-testid="dashboard-page">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-12">
