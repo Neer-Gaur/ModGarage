@@ -26,7 +26,7 @@ print('User ID: ' + userId);
 
 ## Step 2: Test Backend API
 ```bash
-API_URL=https://garage-scroll-test.preview.emergentagent.com
+API_URL=https://build-forward-29.preview.emergentagent.com
 
 # Test auth endpoint
 curl -X GET "$API_URL/api/auth/me" -H "Authorization: Bearer YOUR_SESSION_TOKEN"
@@ -52,5 +52,5 @@ await page.context.add_cookies([{
     "secure": True,
     "sameSite": "None"
 }])
-await page.goto("https://garage-scroll-test.preview.emergentagent.com/dashboard")
+await page.goto("https://build-forward-29.preview.emergentagent.com/dashboard")
 ```
