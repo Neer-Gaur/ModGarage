@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { CaretRight, Check } from '@phosphor-icons/react';
 
 export default function Onboarding() {
-  const { user, setUser } = useAuth();
+  const { user, refresh } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [makes, setMakes] = useState({});
@@ -26,7 +26,8 @@ export default function Onboarding() {
         year: parseInt(form.year), variant: form.variant, color: form.color
       });
       toast.success('Car profile created!');
-      if (user) setUser({ ...user, has_cars: true });
+      // Refresh from server so has_cars=true and we have the new car list
+      await refresh();
       navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error('Failed to create car profile');

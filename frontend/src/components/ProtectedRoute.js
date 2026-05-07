@@ -1,33 +1,37 @@
 import { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ProtectedRoute({ children, requireAdmin = false }) {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const stateUser = location.state?.user;
-  const activeUser = stateUser || user;
 
   useEffect(() => {
     if (loading) return;
-    if (!activeUser) {
+    if (!user) {
+      // eslint-disable-next-line no-console
+      console.log('[ProtectedRoute] No user, redirecting to /');
       navigate('/', { replace: true });
+      return;
     }
-    if (requireAdmin && activeUser && activeUser.role !== 'admin') {
+    if (requireAdmin && user.role !== 'admin') {
       navigate('/dashboard', { replace: true });
     }
-  }, [loading, activeUser, requireAdmin, navigate]);
+  }, [loading, user, requireAdmin, navigate]);
 
-  if (loading && !activeUser) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-mg-dark flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-mg-red border-t-transparent rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-mg-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-white/40 font-mono text-xs tracking-widest uppercase">Loading…</p>
+        </div>
       </div>
     );
   }
 
-  if (!activeUser) return null;
+  if (!user) return null;
+  if (requireAdmin && user.role !== 'admin') return null;
 
   return children;
 }
