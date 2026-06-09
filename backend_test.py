@@ -1,401 +1,417 @@
+"""Backend API tests for Mod Syndicate."""
 import requests
 import sys
-import json
 from datetime import datetime
 
-class ModGarageAPITester:
-    def __init__(self, base_url="https://garage-scroll-test.preview.emergentagent.com"):
-        self.base_url = base_url
-        self.session_token = "test_session_1775814406027"  # From mongosh creation
-        self.user_id = "test-user-1775814406027"
+BASE_URL = "http://127.0.0.1:8000/api"
+
+class ModSyndicateAPITester:
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.token = None
+        self.user = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.car_id = None
+        self.test_email = f"testuser_{datetime.now().strftime('%Y%m%d%H%M%S')}@modsyn.com"
+        self.test_password = "TestPass123!"
         self.product_id = None
-        self.slot_id = None
+        self.garage_item_id = None
         self.booking_id = None
-        self.post_id = None
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, auth_required=True):
-        """Run a single API test"""
-        url = f"{self.base_url}/api/{endpoint}"
-        headers = {'Content-Type': 'application/json'}
-        if auth_required and self.session_token:
-            headers['Authorization'] = f'Bearer {self.session_token}'
+    def log(self, msg, status="INFO"):
+        prefix = {"PASS": "✅", "FAIL": "❌", "INFO": "🔍"}.get(status, "ℹ️")
+        print(f"{prefix} {msg}")
+
+    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
+        """Run a single API test."""
+        url = f"{self.base_url}/{endpoint}"
+        req_headers = {'Content-Type': 'application/json'}
+        if self.token:
+            req_headers['Authorization'] = f'Bearer {self.token}'
+        if headers:
+            req_headers.update(headers)
 
         self.tests_run += 1
-        print(f"\n🔍 Testing {name}...")
-        print(f"   URL: {url}")
+        self.log(f"Testing {name}...", "INFO")
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=req_headers, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers)
+                response = requests.post(url, json=data, headers=req_headers, timeout=10)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers)
+                response = requests.put(url, json=data, headers=req_headers, timeout=10)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers)
+                response = requests.delete(url, headers=req_headers, timeout=10)
+            else:
+                self.log(f"Unknown method {method}", "FAIL")
+                return False, {}
 
             success = response.status_code == expected_status
             if success:
                 self.tests_passed += 1
-                print(f"✅ Passed - Status: {response.status_code}")
-                try:
-                    response_data = response.json()
-                    return True, response_data
-                except:
-                    return True, {}
+                self.log(f"PASSED - Status: {response.status_code}", "PASS")
             else:
-                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
+                self.log(f"FAILED - Expected {expected_status}, got {response.status_code}", "FAIL")
                 try:
-                    error_data = response.json()
-                    print(f"   Error: {error_data}")
+                    self.log(f"Response: {response.text[:200]}", "INFO")
                 except:
-                    print(f"   Response: {response.text}")
-                return False, {}
+                    pass
+
+            try:
+                return success, response.json() if response.text else {}
+            except:
+                return success, {}
 
         except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
+            self.log(f"FAILED - Error: {str(e)}", "FAIL")
             return False, {}
 
-    def test_products_api(self):
-        """Test products endpoints"""
-        print("\n" + "="*50)
-        print("TESTING PRODUCTS API")
-        print("="*50)
-        
-        # Test get all products
-        success, products = self.run_test(
-            "Get All Products",
-            "GET",
-            "products",
-            200,
-            auth_required=False
-        )
-        
-        if success and products:
-            print(f"   Found {len(products)} products")
-            if len(products) >= 15:
-                print("✅ Expected 15+ seeded products found")
-                self.product_id = products[0].get('product_id')
-            else:
-                print(f"⚠️  Expected 15+ products, found {len(products)}")
-        
-        # Test category filtering
-        self.run_test(
-            "Filter Products by Category (rims)",
-            "GET",
-            "products?category=rims",
-            200,
-            auth_required=False
-        )
-        
-        # Test search
-        self.run_test(
-            "Search Products",
-            "GET",
-            "products?search=carbon",
-            200,
-            auth_required=False
-        )
+    def test_health(self):
+        """Test health endpoint."""
+        success, response = self.run_test("Health Check", "GET", "health", 200)
+        if success and response.get("status") == "ok":
+            self.log("Health endpoint returns 'ok'", "PASS")
+            return True
+        return False
 
-    def test_cars_api(self):
-        """Test cars endpoints"""
-        print("\n" + "="*50)
-        print("TESTING CARS API")
-        print("="*50)
-        
-        # Test get car makes
-        success, makes_data = self.run_test(
-            "Get Car Makes Dictionary",
-            "GET",
-            "cars/makes",
-            200,
-            auth_required=False
-        )
-        
-        if success and makes_data:
-            makes = makes_data.get('makes', {})
-            print(f"   Found {len(makes)} car makes")
-            if 'BMW' in makes and 'Honda' in makes:
-                print("✅ Expected car makes found (BMW, Honda)")
-        
-        # Test get user cars (should be empty initially)
-        self.run_test(
-            "Get User Cars (Empty)",
-            "GET",
-            "cars",
-            200
-        )
-        
-        # Test create car
-        success, car_data = self.run_test(
-            "Create User Car",
+    def test_products_list(self):
+        """Test products listing."""
+        success, response = self.run_test("List Products", "GET", "products", 200)
+        if success and isinstance(response, list) and len(response) >= 15:
+            self.log(f"Products endpoint returns {len(response)} products (>= 15)", "PASS")
+            # Store first product ID for later tests
+            if response:
+                self.product_id = response[0].get("id")
+            return True
+        elif success:
+            self.log(f"Products endpoint returns only {len(response)} products (expected >= 15)", "FAIL")
+        return False
+
+    def test_product_categories(self):
+        """Test product categories."""
+        success, response = self.run_test("Product Categories", "GET", "products/categories", 200)
+        if success and isinstance(response, list) and len(response) > 0:
+            self.log(f"Categories endpoint returns {len(response)} categories: {response}", "PASS")
+            return True
+        return False
+
+    def test_products_filter_category(self):
+        """Test product filtering by category."""
+        success, response = self.run_test("Filter Products by Category", "GET", "products?category=wheels", 200)
+        if success and isinstance(response, list):
+            # Check if all returned products are wheels
+            all_wheels = all(p.get("category") == "wheels" for p in response)
+            if all_wheels and len(response) > 0:
+                self.log(f"Category filter works - {len(response)} wheels products", "PASS")
+                return True
+            elif len(response) == 0:
+                self.log("Category filter returns empty list", "FAIL")
+        return False
+
+    def test_products_search(self):
+        """Test product search."""
+        success, response = self.run_test("Search Products (ECU)", "GET", "products?search=ECU", 200)
+        if success and isinstance(response, list) and len(response) >= 1:
+            self.log(f"Search returns {len(response)} products for 'ECU'", "PASS")
+            return True
+        elif success:
+            self.log("Search for 'ECU' returns no products", "FAIL")
+        return False
+
+    def test_register(self):
+        """Test user registration."""
+        success, response = self.run_test(
+            "Register New User",
             "POST",
-            "cars",
+            "auth/register",
+            200,
+            data={"email": self.test_email, "password": self.test_password, "name": "Test User"}
+        )
+        if success and response.get("access_token") and response.get("user"):
+            self.token = response["access_token"]
+            self.user = response["user"]
+            self.log(f"Registration successful - User ID: {self.user.get('id')}", "PASS")
+            # Verify no password_hash in response
+            if "password_hash" in response.get("user", {}):
+                self.log("WARNING: password_hash exposed in user object", "FAIL")
+                return False
+            return True
+        return False
+
+    def test_login(self):
+        """Test user login."""
+        success, response = self.run_test(
+            "Login with Registered Credentials",
+            "POST",
+            "auth/login",
+            200,
+            data={"email": self.test_email, "password": self.test_password}
+        )
+        if success and response.get("access_token"):
+            self.token = response["access_token"]
+            self.log("Login successful", "PASS")
+            return True
+        return False
+
+    def test_auth_me(self):
+        """Test /auth/me endpoint."""
+        success, response = self.run_test("Get Current User", "GET", "auth/me", 200)
+        if success and response.get("id") and "password_hash" not in response:
+            self.log(f"Auth/me returns user without password_hash", "PASS")
+            return True
+        elif success and "password_hash" in response:
+            self.log("CRITICAL: password_hash exposed in /auth/me", "FAIL")
+        return False
+
+    def test_profile_update(self):
+        """Test profile update (onboarding)."""
+        success, response = self.run_test(
+            "Update Profile (Onboarding)",
+            "PUT",
+            "auth/profile",
             200,
             data={
-                "make": "BMW",
-                "model": "3 Series",
-                "year": 2024,
-                "variant": "M Sport",
-                "color": "Alpine White"
+                "name": "Test User Updated",
+                "phone": "+919876543210",
+                "car_model": "Hyundai i20",
+                "car_year": 2023,
+                "car_color": "Midnight Blue",
+                "specs": "N-Line Turbo"
             }
         )
-        
-        if success and car_data:
-            self.car_id = car_data.get('car_id')
-            print(f"   Created car with ID: {self.car_id}")
+        if success and response.get("onboarded") == True:
+            self.log("Profile update sets onboarded=true", "PASS")
+            return True
+        elif success:
+            self.log(f"Profile updated but onboarded={response.get('onboarded')}", "FAIL")
+        return False
 
-    def test_garage_api(self):
-        """Test garage endpoints"""
-        print("\n" + "="*50)
-        print("TESTING GARAGE API")
-        print("="*50)
+    def test_add_to_garage(self):
+        """Test adding product to garage."""
+        if not self.product_id:
+            self.log("No product_id available, skipping garage test", "FAIL")
+            return False
         
-        if not self.car_id or not self.product_id:
-            print("❌ Skipping garage tests - missing car_id or product_id")
-            return
-        
-        # Test get empty garage
-        self.run_test(
-            "Get Empty Garage",
-            "GET",
-            f"garage/{self.car_id}",
-            200
-        )
-        
-        # Test add to garage
-        success, _ = self.run_test(
+        success, response = self.run_test(
             "Add Product to Garage",
             "POST",
             "garage",
             200,
+            data={"product_id": self.product_id, "note": "Test garage item"}
+        )
+        if success and response.get("id"):
+            self.garage_item_id = response.get("id")
+            self.log(f"Product added to garage - Item ID: {self.garage_item_id}", "PASS")
+            return True
+        return False
+
+    def test_list_garage(self):
+        """Test listing garage items."""
+        success, response = self.run_test("List Garage Items", "GET", "garage", 200)
+        if success and isinstance(response, list):
+            # Check if product is hydrated
+            if len(response) > 0 and response[0].get("product"):
+                self.log(f"Garage list returns {len(response)} items with hydrated products", "PASS")
+                return True
+            elif len(response) > 0:
+                self.log("Garage items returned but products not hydrated", "FAIL")
+            else:
+                self.log("Garage list is empty (expected at least 1 item)", "FAIL")
+        return False
+
+    def test_booking_quote(self):
+        """Test booking quote."""
+        if not self.product_id:
+            self.log("No product_id available, skipping quote test", "FAIL")
+            return False
+        
+        success, response = self.run_test(
+            "Get Booking Quote",
+            "POST",
+            "bookings/quote",
+            200,
             data={
-                "car_id": self.car_id,
-                "product_id": self.product_id,
-                "quantity": 1
+                "product_ids": [self.product_id],
+                "scheduled_date": "2025-09-15",
+                "scheduled_slot": "10:00-12:00"
             }
         )
-        
-        # Test get garage with items
-        success, garage_items = self.run_test(
-            "Get Garage with Items",
-            "GET",
-            f"garage/{self.car_id}",
-            200
-        )
-        
-        if success and garage_items:
-            print(f"   Found {len(garage_items)} items in garage")
-        
-        # Test get garage total
-        success, total_data = self.run_test(
-            "Get Garage Total Cost",
-            "GET",
-            f"garage/{self.car_id}/total",
-            200
-        )
-        
-        if success and total_data:
-            total = total_data.get('total', 0)
-            print(f"   Total cost: ₹{total:,}")
+        if success and all(k in response for k in ["subtotal", "install_fee", "taxes", "total"]):
+            self.log(f"Quote: subtotal={response['subtotal']}, total={response['total']}", "PASS")
+            return True
+        return False
 
-    def test_slots_api(self):
-        """Test booking slots endpoints"""
-        print("\n" + "="*50)
-        print("TESTING SLOTS API")
-        print("="*50)
+    def test_create_booking(self):
+        """Test creating a booking."""
+        if not self.product_id:
+            self.log("No product_id available, skipping booking test", "FAIL")
+            return False
         
-        # Test get available slots
-        success, slots = self.run_test(
-            "Get Available Booking Slots",
-            "GET",
-            "slots",
-            200,
-            auth_required=False
-        )
-        
-        if success and slots:
-            print(f"   Found {len(slots)} available slots")
-            if len(slots) >= 28:
-                print("✅ Expected 28+ seeded slots found")
-                self.slot_id = slots[0].get('slot_id')
-            else:
-                print(f"⚠️  Expected 28+ slots, found {len(slots)}")
-
-    def test_bookings_api(self):
-        """Test bookings endpoints"""
-        print("\n" + "="*50)
-        print("TESTING BOOKINGS API")
-        print("="*50)
-        
-        if not self.car_id or not self.slot_id:
-            print("❌ Skipping booking tests - missing car_id or slot_id")
-            return
-        
-        # Test get user bookings (empty)
-        self.run_test(
-            "Get User Bookings (Empty)",
-            "GET",
-            "bookings",
-            200
-        )
-        
-        # Test create booking
-        success, booking_data = self.run_test(
+        success, response = self.run_test(
             "Create Booking",
             "POST",
             "bookings",
             200,
             data={
-                "car_id": self.car_id,
-                "slot_id": self.slot_id,
-                "pickup_address": "123 Test Street, Test City, 12345"
+                "product_ids": [self.product_id],
+                "scheduled_date": "2025-09-15",
+                "scheduled_slot": "10:00-12:00",
+                "notes": "Test booking"
             }
         )
-        
-        if success and booking_data:
-            self.booking_id = booking_data.get('booking_id')
-            booking_code = booking_data.get('booking_code')
-            print(f"   Created booking: {booking_code}")
-        
-        # Test get user bookings (with booking)
-        success, bookings = self.run_test(
-            "Get User Bookings (With Data)",
-            "GET",
-            "bookings",
-            200
-        )
-        
-        if success and bookings:
-            print(f"   Found {len(bookings)} bookings")
+        if success and response.get("id") and response.get("status") == "confirmed" and response.get("payment_status") == "paid_mock":
+            self.booking_id = response.get("id")
+            self.log(f"Booking created - ID: {self.booking_id}, status: confirmed, payment: paid_mock", "PASS")
+            return True
+        elif success:
+            self.log(f"Booking created but status={response.get('status')}, payment={response.get('payment_status')}", "FAIL")
+        return False
 
-    def test_community_api(self):
-        """Test community/posts endpoints"""
-        print("\n" + "="*50)
-        print("TESTING COMMUNITY API")
-        print("="*50)
-        
-        # Test get posts
-        success, posts = self.run_test(
-            "Get Community Posts",
-            "GET",
-            "posts",
-            200,
-            auth_required=False
-        )
-        
-        if success and posts:
-            print(f"   Found {len(posts)} community posts")
-            if len(posts) >= 4:
-                print("✅ Expected 4+ seeded posts found")
-                self.post_id = posts[0].get('post_id')
-            else:
-                print(f"⚠️  Expected 4+ posts, found {len(posts)}")
-        
-        # Test create post
-        success, post_data = self.run_test(
+    def test_list_bookings(self):
+        """Test listing bookings."""
+        success, response = self.run_test("List Bookings", "GET", "bookings", 200)
+        if success and isinstance(response, list) and len(response) > 0:
+            self.log(f"Bookings list returns {len(response)} bookings", "PASS")
+            return True
+        elif success:
+            self.log("Bookings list is empty (expected at least 1)", "FAIL")
+        return False
+
+    def test_community_posts(self):
+        """Test community posts listing."""
+        success, response = self.run_test("List Community Posts", "GET", "community/posts", 200)
+        if success and isinstance(response, list):
+            self.log(f"Community posts returns {len(response)} posts (demo or real)", "PASS")
+            return True
+        return False
+
+    def test_create_post(self):
+        """Test creating a community post."""
+        success, response = self.run_test(
             "Create Community Post",
             "POST",
-            "posts",
+            "community/posts",
             200,
             data={
-                "caption": "Test post from API testing",
-                "media_urls": ["https://images.unsplash.com/photo-1774576320208-9914d1fc5be5?w=600&h=400&fit=crop"],
-                "tagged_products": [self.product_id] if self.product_id else []
+                "title": "Test Build Post",
+                "body": "This is a test post from automated testing",
+                "car_model": "Hyundai i20",
+                "tags": ["test"]
             }
         )
-        
-        if success and post_data:
-            test_post_id = post_data.get('post_id')
-            print(f"   Created test post: {test_post_id}")
-        
-        # Test like post
-        if self.post_id:
-            self.run_test(
-                "Like Community Post",
-                "POST",
-                f"posts/{self.post_id}/like",
-                200
-            )
-        
-        # Test get comments
-        if self.post_id:
-            self.run_test(
-                "Get Post Comments",
-                "GET",
-                f"posts/{self.post_id}/comments",
-                200,
-                auth_required=False
-            )
-        
-        # Test add comment
-        if self.post_id:
-            self.run_test(
-                "Add Comment to Post",
-                "POST",
-                f"posts/{self.post_id}/comments",
-                200,
-                data={"content": "Great build! Love the setup."}
-            )
+        if success and response.get("id"):
+            self.log(f"Post created - ID: {response.get('id')}", "PASS")
+            return True
+        return False
 
-    def test_auth_api(self):
-        """Test authentication endpoints"""
-        print("\n" + "="*50)
-        print("TESTING AUTH API")
-        print("="*50)
-        
-        # Test auth/me endpoint
-        success, user_data = self.run_test(
-            "Get Current User Info",
-            "GET",
-            "auth/me",
-            200
+    def test_community_events(self):
+        """Test community events listing."""
+        success, response = self.run_test("List Community Events", "GET", "community/events", 200)
+        if success and isinstance(response, list) and len(response) >= 5:
+            self.log(f"Events endpoint returns {len(response)} events (>= 5)", "PASS")
+            return True
+        elif success:
+            self.log(f"Events endpoint returns only {len(response)} events (expected >= 5)", "FAIL")
+        return False
+
+    def test_community_reviews(self):
+        """Test community reviews listing."""
+        success, response = self.run_test("List Community Reviews", "GET", "community/reviews", 200)
+        if success and isinstance(response, list) and len(response) >= 4:
+            self.log(f"Reviews endpoint returns {len(response)} reviews (>= 4)", "PASS")
+            return True
+        elif success:
+            self.log(f"Reviews endpoint returns only {len(response)} reviews (expected >= 4)", "FAIL")
+        return False
+
+    def test_contact_submit(self):
+        """Test contact form submission."""
+        success, response = self.run_test(
+            "Submit Contact Form",
+            "POST",
+            "contact",
+            200,
+            data={
+                "name": "Test User",
+                "email": "test@example.com",
+                "message": "This is a test message",
+                "phone": "+919876543210"
+            }
         )
+        if success and response.get("ok"):
+            self.log("Contact form submission successful", "PASS")
+            return True
+        return False
+
+    def test_auth_protection(self):
+        """Test that protected endpoints return 401 without token."""
+        # Temporarily remove token
+        original_token = self.token
+        self.token = None
         
-        if success and user_data:
-            user_id = user_data.get('user_id')
-            email = user_data.get('email')
-            has_cars = user_data.get('has_cars')
-            print(f"   User: {email} (ID: {user_id})")
-            print(f"   Has cars: {has_cars}")
+        success, _ = self.run_test("Protected Endpoint (No Token)", "GET", "garage", 401)
+        
+        # Restore token
+        self.token = original_token
+        
+        if success:
+            self.log("Protected endpoints correctly return 401 without token", "PASS")
+            return True
+        return False
 
     def run_all_tests(self):
-        """Run all API tests"""
-        print("🚀 Starting ModGarage API Testing")
-        print(f"🔗 Base URL: {self.base_url}")
-        print(f"🔑 Session Token: {self.session_token[:20]}...")
-        
-        # Test in logical order
-        self.test_auth_api()
-        self.test_products_api()
-        self.test_cars_api()
-        self.test_garage_api()
-        self.test_slots_api()
-        self.test_bookings_api()
-        self.test_community_api()
-        
-        # Print final results
+        """Run all backend tests in sequence."""
         print("\n" + "="*60)
-        print("FINAL TEST RESULTS")
-        print("="*60)
-        print(f"📊 Tests passed: {self.tests_passed}/{self.tests_run}")
+        print("MOD SYNDICATE BACKEND API TESTS")
+        print("="*60 + "\n")
         
-        success_rate = (self.tests_passed / self.tests_run * 100) if self.tests_run > 0 else 0
-        print(f"📈 Success rate: {success_rate:.1f}%")
+        # Basic endpoints
+        self.test_health()
+        self.test_products_list()
+        self.test_product_categories()
+        self.test_products_filter_category()
+        self.test_products_search()
         
-        if self.tests_passed == self.tests_run:
-            print("🎉 All tests passed!")
-            return 0
-        else:
-            print(f"⚠️  {self.tests_run - self.tests_passed} tests failed")
-            return 1
+        # Auth flow
+        self.test_register()
+        self.test_login()
+        self.test_auth_me()
+        self.test_profile_update()
+        
+        # Garage
+        self.test_add_to_garage()
+        self.test_list_garage()
+        
+        # Bookings
+        self.test_booking_quote()
+        self.test_create_booking()
+        self.test_list_bookings()
+        
+        # Community
+        self.test_community_posts()
+        self.test_create_post()
+        self.test_community_events()
+        self.test_community_reviews()
+        
+        # Contact
+        self.test_contact_submit()
+        
+        # Auth protection
+        self.test_auth_protection()
+        
+        # Print summary
+        print("\n" + "="*60)
+        print(f"TESTS COMPLETED: {self.tests_passed}/{self.tests_run} PASSED")
+        print("="*60 + "\n")
+        
+        return 0 if self.tests_passed == self.tests_run else 1
+
 
 def main():
-    tester = ModGarageAPITester()
+    tester = ModSyndicateAPITester()
     return tester.run_all_tests()
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -101,3 +101,72 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Migrate database to PostgreSQL/Supabase, make checkout direct with 0 install fees, ensure generic car copy.
+backend:
+  - task: "Database Migration to PostgreSQL"
+    implemented: true
+    working: true
+    file: "backend/db.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Completed dual-mode SQLite/Postgres db.py, migrated all endpoints in server.py, successfully passed 20/20 tests."
+
+  - task: "Supabase Schema SQL Script"
+    implemented: true
+    working: true
+    file: "supabase_schema.sql"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Created idempotent supabase_schema.sql containing all table DDLs, bucket config, storage policies, and 15 product seed data entries."
+
+frontend:
+  - task: "Generic Car Copy & Placeholders"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Community.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Updated Community post form and Onboarding placeholders to be completely generic."
+
+  - task: "Direct Checkout & Zero Install Fees"
+    implemented: true
+    working: true
+    file: "frontend/src/components/ms/BookingDrawer.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Configured 'Buy Now' from Garage to route directly to card payment step, passing exclude_install=true and showing ₹0.00 install fee."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Database Migration to PostgreSQL"
+    - "Direct Checkout & Zero Install Fees"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "sequential"
+
+agent_communication:
+  - agent: "main"
+    message: "All backend and frontend requirements have been successfully implemented and verified locally. Seeding and schema scripts are robust."

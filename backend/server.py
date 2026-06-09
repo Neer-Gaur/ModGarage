@@ -1,689 +1,542 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Query
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
+"""Mod Syndicate FastAPI backend.
+
+All endpoints live behind the ``/api`` prefix.
+"""
 import logging
-import httpx
-import uuid
+import os
+from datetime import datetime, timezone
 from pathlib import Path
-from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime, timezone, timedelta
+
+from dotenv import load_dotenv
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+from auth import (  # noqa: E402
+    create_access_token,
+    get_current_user,
+    get_optional_user,
+    hash_password,
+    verify_password,
+)
+from db import close_db, get_db, init_db  # noqa: E402
+from models import (  # noqa: E402
+    AuthOut,
+    Booking,
+    BookingCreate,
+    ContactIn,
+    Event,
+    GarageAddIn,
+    GarageItem,
+    LoginIn,
+    Post,
+    PostCreate,
+    Product,
+    ProfileUpdate,
+    RegisterIn,
+    Review,
+    ReviewCreate,
+)
+from seed_data import ensure_seed  # noqa: E402
 
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("mod-syndicate")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+app = FastAPI(title="Mod Syndicate API", version="0.1.0")
+api = APIRouter(prefix="/api")
 
-# ========== MODELS ==========
-class SessionExchange(BaseModel):
-    session_id: str
 
-class CarCreate(BaseModel):
-    make: str
-    model: str
-    year: int
-    variant: str = ""
-    color: str = ""
+# ---- root ------------------------------------------------------------------
+@api.get("/")
+async def root():
+    return {"message": "Mod Syndicate API online", "version": "0.1.0"}
 
-class GarageAdd(BaseModel):
-    car_id: str
-    product_id: str
-    quantity: int = 1
 
-class BookingCreate(BaseModel):
-    car_id: str
-    slot_id: str
-    pickup_address: str
+@api.get("/health")
+async def health():
+    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
 
-class ChannelCreate(BaseModel):
-    name: str
-    description: str = ""
 
-class PostCreate(BaseModel):
-    caption: str
-    media_urls: List[str] = []
-    tagged_products: List[str] = []
-    car_id: Optional[str] = None
-    channel_id: Optional[str] = None
+# ---- AUTH ------------------------------------------------------------------
+@api.post("/auth/register", response_model=AuthOut)
+async def register(payload: RegisterIn):
+    db = get_db()
+    email = payload.email.lower().strip()
+    existing = await db.fetchrow("SELECT id FROM users WHERE email = $1", email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    import uuid
 
-class VoteCreate(BaseModel):
-    vote: str  # "up" or "down"
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "email": email,
+        "name": payload.name or email.split("@")[0],
+        "password_hash": hash_password(payload.password),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "onboarded": False,
+        "phone": None,
+        "city": None,
+        "car_model": None,
+        "car_year": None,
+        "car_color": None,
+        "car_photo_url": None,
+        "specs": None,
+    }
+    await db.execute(
+        """
+        INSERT INTO users (id, email, name, password_hash, created_at, onboarded, phone, city, car_model, car_year, car_color, car_photo_url, specs)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        """,
+        user_doc["id"], user_doc["email"], user_doc["name"], user_doc["password_hash"], user_doc["created_at"],
+        user_doc["onboarded"], user_doc["phone"], user_doc["city"], user_doc["car_model"], user_doc["car_year"],
+        user_doc["car_color"], user_doc["car_photo_url"], user_doc["specs"]
+    )
+    token = create_access_token(user_id, email)
+    user_doc.pop("password_hash", None)
+    return AuthOut(access_token=token, user=user_doc)
 
-class CommentCreate(BaseModel):
-    content: str
-    parent_comment_id: Optional[str] = None
 
-class SlotCreate(BaseModel):
-    date: str
-    start_time: str
-    end_time: str
-    capacity: int = 5
+@api.post("/auth/login", response_model=AuthOut)
+async def login(payload: LoginIn):
+    db = get_db()
+    email = payload.email.lower().strip()
+    user = await db.fetchrow("SELECT * FROM users WHERE email = $1", email)
+    if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_access_token(user["id"], email)
+    user.pop("password_hash", None)
+    return AuthOut(access_token=token, user=user)
 
-class StatusUpdate(BaseModel):
-    status: str
 
-# ========== AUTH HELPER ==========
-async def get_current_user(request: Request) -> dict:
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            session_token = auth_header.split(" ")[1]
-    if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    session = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    expires_at = session["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+@api.get("/auth/me")
+async def me(user=Depends(get_current_user)):
     return user
 
-# ========== AUTH ROUTES ==========
-# REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-@api_router.post("/auth/session")
-async def exchange_session(body: SessionExchange, response: Response):
-    async with httpx.AsyncClient() as http:
-        resp = await http.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": body.session_id}
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session ID")
-    data = resp.json()
-    email = data["email"]
-    name = data.get("name", "")
-    picture = data.get("picture", "")
-    session_token = data["session_token"]
 
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one({"email": email}, {"$set": {"name": name, "picture": picture}})
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": name, "picture": picture,
-            "phone": "", "role": "user", "created_at": datetime.now(timezone.utc).isoformat()
-        })
-
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-
-    response.set_cookie(
-        key="session_token", value=session_token,
-        httponly=True, secure=True, samesite="none", path="/", max_age=7*24*60*60
+@api.put("/auth/profile")
+async def update_profile(payload: ProfileUpdate, user=Depends(get_current_user)):
+    db = get_db()
+    updates = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
+    if updates:
+        if any(k in updates for k in ("car_model", "phone")) and "onboarded" not in updates:
+            updates["onboarded"] = True
+            
+        keys = list(updates.keys())
+        values = list(updates.values())
+        set_clause = ", ".join([f"{k} = ${i+1}" for i, k in enumerate(keys)])
+        query = f"UPDATE users SET {set_clause} WHERE id = ${len(keys)+1}"
+        await db.execute(query, *values, user["id"])
+        
+    fresh = await db.fetchrow(
+        "SELECT id, email, name, created_at, onboarded, phone, city, car_model, car_year, car_color, car_photo_url, specs FROM users WHERE id = $1",
+        user["id"]
     )
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    has_cars = await db.cars.count_documents({"user_id": user_id}) > 0
-    return {**user, "has_cars": has_cars}
+    return fresh
 
-@api_router.get("/auth/me")
-async def auth_me(request: Request):
-    user = await get_current_user(request)
-    has_cars = await db.cars.count_documents({"user_id": user["user_id"]}) > 0
-    return {**user, "has_cars": has_cars}
 
-@api_router.post("/auth/logout")
-async def auth_logout(request: Request, response: Response):
-    session_token = request.cookies.get("session_token")
-    if session_token:
-        await db.user_sessions.delete_many({"session_token": session_token})
-    response.delete_cookie("session_token", path="/")
-    return {"message": "Logged out"}
-
-# ========== CARS ROUTES ==========
-CAR_MAKES = {
-    "Maruti Suzuki": ["Swift", "Baleno", "WagonR", "Alto", "Brezza", "Ciaz", "Ertiga"],
-    "Honda": ["City", "Civic", "Amaze", "Jazz", "WR-V"],
-    "Hyundai": ["Creta", "i20", "Venue", "Verna", "Tucson"],
-    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz"],
-    "Toyota": ["Fortuner", "Innova", "Camry", "Glanza", "Urban Cruiser"],
-    "Mahindra": ["Thar", "XUV700", "Scorpio", "Bolero", "XUV300"],
-    "BMW": ["3 Series", "5 Series", "X1", "X3", "X5", "M3", "M5"],
-    "Mercedes": ["C-Class", "E-Class", "GLA", "GLC", "A-Class", "AMG GT"],
-    "Audi": ["A4", "A6", "Q3", "Q5", "Q7", "RS5"],
-    "Volkswagen": ["Polo", "Vento", "Taigun", "Virtus"]
-}
-
-@api_router.get("/cars/makes")
-async def get_car_makes():
-    return {"makes": CAR_MAKES}
-
-@api_router.get("/cars")
-async def get_user_cars(request: Request):
-    user = await get_current_user(request)
-    return await db.cars.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(50)
-
-@api_router.post("/cars")
-async def create_car(car: CarCreate, request: Request):
-    user = await get_current_user(request)
-    count = await db.cars.count_documents({"user_id": user["user_id"]})
-    doc = {
-        "car_id": f"car_{uuid.uuid4().hex[:12]}", "user_id": user["user_id"],
-        "make": car.make, "model": car.model, "year": car.year,
-        "variant": car.variant, "color": car.color,
-        "is_primary": count == 0, "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.cars.insert_one(doc)
-    return await db.cars.find_one({"car_id": doc["car_id"]}, {"_id": 0})
-
-@api_router.delete("/cars/{car_id}")
-async def delete_car(car_id: str, request: Request):
-    user = await get_current_user(request)
-    result = await db.cars.delete_one({"car_id": car_id, "user_id": user["user_id"]})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Car not found")
-    return {"message": "Car deleted"}
-
-# ========== PRODUCTS ROUTES ==========
-@api_router.get("/products")
-async def get_products(
+# ---- PRODUCTS --------------------------------------------------------------
+@api.get("/products")
+async def list_products(
     category: Optional[str] = None,
-    make: Optional[str] = None,
     search: Optional[str] = None,
+    fitment: Optional[str] = None,
     min_price: Optional[float] = None,
-    max_price: Optional[float] = None
+    max_price: Optional[float] = None,
+    sort: Optional[str] = Query("new", description="new|price_asc|price_desc|rating"),
+    limit: int = 60,
 ):
-    query = {"is_active": True}
-    if category:
-        query["category"] = category
-    if make:
-        query["$or"] = [{"compatible_makes": {"$size": 0}}, {"compatible_makes": make}]
-    if min_price is not None:
-        query["price"] = {"$gte": min_price}
-    if max_price is not None:
-        query.setdefault("price", {})["$lte"] = max_price
+    db = get_db()
+    query = "SELECT * FROM products WHERE 1=1"
+    params = []
+    
+    if category and category != "all":
+        params.append(category)
+        query += f" AND category = ${len(params)}"
+    if fitment and fitment != "all":
+        params.append(f"%{fitment}%")
+        query += f" AND CAST(fitment AS TEXT) ILIKE ${len(params)}"
     if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"brand": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}}
-        ]
-    products = await db.products.find(query, {"_id": 0}).to_list(100)
-    return products
-
-@api_router.get("/products/{slug}")
-async def get_product_detail(slug: str):
-    product = await db.products.find_one({"slug": slug, "is_active": True}, {"_id": 0})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return product
-
-# ========== GARAGE ROUTES ==========
-@api_router.get("/garage/{car_id}")
-async def get_garage_items(car_id: str, request: Request):
-    user = await get_current_user(request)
-    items = await db.garage_items.find(
-        {"user_id": user["user_id"], "car_id": car_id}, {"_id": 0}
-    ).to_list(100)
-    for item in items:
-        product = await db.products.find_one({"product_id": item["product_id"]}, {"_id": 0})
-        if product:
-            item["product"] = product
+        params.append(f"%{search}%")
+        idx1 = len(params)
+        params.append(f"%{search}%")
+        idx2 = len(params)
+        params.append(f"%{search}%")
+        idx3 = len(params)
+        params.append(f"%{search}%")
+        idx4 = len(params)
+        query += f" AND (name ILIKE ${idx1} OR brand ILIKE ${idx2} OR description ILIKE ${idx3} OR CAST(tags AS TEXT) ILIKE ${idx4})"
+    if min_price is not None:
+        params.append(min_price)
+        query += f" AND price >= ${len(params)}"
+    if max_price is not None:
+        params.append(max_price)
+        query += f" AND price <= ${len(params)}"
+        
+    if sort == "price_asc":
+        query += " ORDER BY price ASC"
+    elif sort == "price_desc":
+        query += " ORDER BY price DESC"
+    elif sort == "rating":
+        query += " ORDER BY rating DESC"
+    else:
+        query += " ORDER BY created_at DESC"
+        
+    params.append(limit)
+    query += f" LIMIT ${len(params)}"
+    
+    items = await db.fetch(query, *params)
     return items
 
-@api_router.post("/garage")
-async def add_to_garage(item: GarageAdd, request: Request):
-    user = await get_current_user(request)
-    existing = await db.garage_items.find_one({
-        "user_id": user["user_id"], "car_id": item.car_id, "product_id": item.product_id
-    })
-    if existing:
-        await db.garage_items.update_one(
-            {"user_id": user["user_id"], "car_id": item.car_id, "product_id": item.product_id},
-            {"$inc": {"quantity": item.quantity}}
-        )
-    else:
-        doc = {
-            "item_id": f"gi_{uuid.uuid4().hex[:12]}",
-            "user_id": user["user_id"], "car_id": item.car_id,
-            "product_id": item.product_id, "quantity": item.quantity,
-            "customization": {}, "added_at": datetime.now(timezone.utc).isoformat()
+
+@api.get("/products/categories")
+async def product_categories():
+    db = get_db()
+    rows = await db.fetch("SELECT DISTINCT category FROM products")
+    cats = [r["category"] for r in rows if r["category"]]
+    return sorted(cats)
+
+
+@api.get("/products/{product_id}")
+async def get_product(product_id: str):
+    db = get_db()
+    p = await db.fetchrow("SELECT * FROM products WHERE id = $1", product_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return p
+
+
+# ---- GARAGE ----------------------------------------------------------------
+@api.get("/garage")
+async def list_garage(user=Depends(get_current_user)):
+    db = get_db()
+    query = """
+        SELECT g.id AS garage_id, g.user_id, g.product_id, g.note, g.status, g.added_at,
+               p.name, p.brand, p.category, p.price, p.sale_price, p.rating, p.reviews_count,
+               p.images, p.description, p.specs, p.fitment, p.tags, p.in_stock, p.created_at AS p_created_at
+        FROM garage g
+        LEFT JOIN products p ON g.product_id = p.id
+        WHERE g.user_id = $1
+        ORDER BY g.added_at DESC
+    """
+    rows = await db.fetch(query, user["id"])
+    
+    items = []
+    for r in rows:
+        item = {
+            "id": r["garage_id"],
+            "user_id": r["user_id"],
+            "product_id": r["product_id"],
+            "note": r["note"],
+            "status": r["status"],
+            "added_at": r["added_at"],
+            "product": {
+                "id": r["product_id"],
+                "name": r["name"],
+                "brand": r["brand"],
+                "category": r["category"],
+                "price": r["price"],
+                "sale_price": r["sale_price"],
+                "rating": r["rating"],
+                "reviews_count": r["reviews_count"],
+                "images": r["images"],
+                "description": r["description"],
+                "specs": r["specs"],
+                "fitment": r["fitment"],
+                "tags": r["tags"],
+                "in_stock": r["in_stock"],
+                "created_at": r["p_created_at"]
+            } if r["name"] else None
         }
-        await db.garage_items.insert_one(doc)
-    return {"message": "Added to garage"}
+        items.append(item)
+    return items
 
-@api_router.delete("/garage/{item_id}")
-async def remove_from_garage(item_id: str, request: Request):
-    user = await get_current_user(request)
-    result = await db.garage_items.delete_one({"item_id": item_id, "user_id": user["user_id"]})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return {"message": "Removed from garage"}
 
-@api_router.get("/garage/{car_id}/total")
-async def get_garage_total(car_id: str, request: Request):
-    user = await get_current_user(request)
-    items = await db.garage_items.find(
-        {"user_id": user["user_id"], "car_id": car_id}, {"_id": 0}
-    ).to_list(100)
-    total_parts = 0
-    total_labour = 0
-    for item in items:
-        product = await db.products.find_one({"product_id": item["product_id"]}, {"_id": 0})
-        if product:
-            total_parts += product["price"] * item["quantity"]
-            total_labour += product["installation_cost"] * item["quantity"]
-    return {"total_parts": total_parts, "total_labour": total_labour, "total": total_parts + total_labour}
-
-# ========== SLOTS ROUTES ==========
-@api_router.get("/slots")
-async def get_available_slots(date: Optional[str] = None):
-    query = {"is_available": True}
-    if date:
-        query["date"] = date
-    else:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        query["date"] = {"$gte": today}
-    slots = await db.booking_slots.find(query, {"_id": 0}).sort("date", 1).to_list(100)
-    return [s for s in slots if s.get("booked_count", 0) < s.get("capacity", 5)]
-
-# ========== BOOKINGS ROUTES ==========
-@api_router.post("/bookings")
-async def create_booking(booking: BookingCreate, request: Request):
-    user = await get_current_user(request)
-    slot = await db.booking_slots.find_one({"slot_id": booking.slot_id}, {"_id": 0})
-    if not slot or not slot.get("is_available") or slot.get("booked_count", 0) >= slot.get("capacity", 5):
-        raise HTTPException(status_code=400, detail="Slot not available")
-
-    items = await db.garage_items.find(
-        {"user_id": user["user_id"], "car_id": booking.car_id}, {"_id": 0}
-    ).to_list(100)
-    if not items:
-        raise HTTPException(status_code=400, detail="Garage is empty")
-
-    total_parts = 0
-    total_labour = 0
-    booking_items = []
-    for item in items:
-        product = await db.products.find_one({"product_id": item["product_id"]}, {"_id": 0})
-        if product:
-            total_parts += product["price"] * item["quantity"]
-            total_labour += product["installation_cost"] * item["quantity"]
-            booking_items.append({
-                "product_id": item["product_id"], "quantity": item["quantity"],
-                "unit_price": product["price"], "product_name": product["name"]
-            })
-
-    booking_count = await db.bookings.count_documents({})
-    booking_code = f"MG-2026-{str(booking_count + 1).zfill(4)}"
-    booking_doc = {
-        "booking_id": f"bk_{uuid.uuid4().hex[:12]}",
-        "booking_code": booking_code, "user_id": user["user_id"],
-        "car_id": booking.car_id, "slot_id": booking.slot_id,
-        "status": "confirmed", "pickup_address": booking.pickup_address,
-        "total_parts_cost": total_parts, "total_labour_cost": total_labour,
-        "total_amount": total_parts + total_labour,
-        "items": booking_items,
-        "slot_date": slot.get("date", ""), "slot_time": f"{slot.get('start_time', '')} - {slot.get('end_time', '')}",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+@api.post("/garage")
+async def add_to_garage(payload: GarageAddIn, user=Depends(get_current_user)):
+    db = get_db()
+    p = await db.fetchrow("SELECT id FROM products WHERE id = $1", payload.product_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Product not found")
+    existing = await db.fetchrow(
+        "SELECT * FROM garage WHERE user_id = $1 AND product_id = $2 AND status = 'saved'",
+        user["id"], payload.product_id
+    )
+    if existing:
+        return existing
+    import uuid
+    item_id = str(uuid.uuid4())
+    added_at = datetime.utcnow().isoformat()
+    await db.execute(
+        """
+        INSERT INTO garage (id, user_id, product_id, note, status, added_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """,
+        item_id, user["id"], payload.product_id, payload.note, "saved", added_at
+    )
+    return {
+        "id": item_id,
+        "user_id": user["id"],
+        "product_id": payload.product_id,
+        "note": payload.note,
+        "status": "saved",
+        "added_at": added_at
     }
-    await db.bookings.insert_one(booking_doc)
-    await db.booking_slots.update_one({"slot_id": booking.slot_id}, {"$inc": {"booked_count": 1}})
-    await db.garage_items.delete_many({"user_id": user["user_id"], "car_id": booking.car_id})
-    return await db.bookings.find_one({"booking_id": booking_doc["booking_id"]}, {"_id": 0})
 
-@api_router.get("/bookings")
-async def get_user_bookings(request: Request):
-    user = await get_current_user(request)
-    return await db.bookings.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
 
-@api_router.get("/bookings/{booking_id}")
-async def get_booking_detail(booking_id: str, request: Request):
-    user = await get_current_user(request)
-    booking = await db.bookings.find_one({"booking_id": booking_id, "user_id": user["user_id"]}, {"_id": 0})
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+@api.delete("/garage/{item_id}")
+async def remove_from_garage(item_id: str, user=Depends(get_current_user)):
+    db = get_db()
+    rc = await db.execute("DELETE FROM garage WHERE id = $1 AND user_id = $2", item_id, user["id"])
+    if rc == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"ok": True}
+
+
+# ---- BOOKINGS --------------------------------------------------------------
+def _quote(products: list[dict], exclude_install: bool = False) -> dict:
+    subtotal = sum((p.get("sale_price") or p.get("price") or 0) for p in products)
+    install_fee = 0.0 if exclude_install else round(subtotal * 0.08, 2)  # 8% install or 0
+    taxes = round((subtotal + install_fee) * 0.18, 2)  # 18% GST
+    total = round(subtotal + install_fee + taxes, 2)
+    return {"subtotal": round(subtotal, 2), "install_fee": install_fee, "taxes": taxes, "total": total}
+
+
+@api.post("/bookings/quote")
+async def quote_booking(payload: BookingCreate, user=Depends(get_current_user)):
+    db = get_db()
+    if not payload.product_ids:
+        raise HTTPException(status_code=400, detail="No product IDs provided")
+    
+    placeholders = ", ".join([f"${i+1}" for i in range(len(payload.product_ids))])
+    query = f"SELECT * FROM products WHERE id IN ({placeholders})"
+    products = await db.fetch(query, *payload.product_ids)
+    if not products:
+        raise HTTPException(status_code=400, detail="No valid products in selection")
+    q = _quote(products, exclude_install=payload.exclude_install)
+    return {**q, "products": products}
+
+
+@api.post("/bookings", response_model=Booking)
+async def create_booking(payload: BookingCreate, user=Depends(get_current_user)):
+    db = get_db()
+    if not payload.product_ids:
+        raise HTTPException(status_code=400, detail="No product IDs provided")
+    
+    placeholders = ", ".join([f"${i+1}" for i in range(len(payload.product_ids))])
+    query = f"SELECT * FROM products WHERE id IN ({placeholders})"
+    products = await db.fetch(query, *payload.product_ids)
+    if not products:
+        raise HTTPException(status_code=400, detail="No valid products in selection")
+    q = _quote(products, exclude_install=payload.exclude_install)
+    
+    import uuid
+    booking_id = str(uuid.uuid4())
+    booking_code = "MS-" + uuid.uuid4().hex[:8].upper()
+    created_at = datetime.utcnow().isoformat()
+    delivery_eta = "3-5 business days after order date" if payload.exclude_install else "3-5 business days after install date"
+    
+    booking = Booking(
+        id=booking_id,
+        user_id=user["id"],
+        booking_code=booking_code,
+        product_ids=payload.product_ids,
+        products_snapshot=products,
+        scheduled_date=payload.scheduled_date,
+        scheduled_slot=payload.scheduled_slot,
+        car_model=payload.car_model or user.get("car_model"),
+        notes=payload.notes,
+        subtotal=q["subtotal"],
+        install_fee=q["install_fee"],
+        taxes=q["taxes"],
+        total=q["total"],
+        payment_method=payload.payment_method or "card",
+        payment_status="paid_mock",
+        status="confirmed",
+        delivery_eta=delivery_eta,
+        exclude_install=payload.exclude_install,
+        created_at=created_at,
+    )
+    
+    await db.execute(
+        """
+        INSERT INTO bookings (id, user_id, booking_code, product_ids, products_snapshot, scheduled_date, scheduled_slot, car_model, notes, subtotal, install_fee, taxes, total, payment_method, payment_status, status, delivery_eta, exclude_install, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        """,
+        booking.id, booking.user_id, booking.booking_code, booking.product_ids, booking.products_snapshot,
+        booking.scheduled_date, booking.scheduled_slot, booking.car_model, booking.notes, booking.subtotal,
+        booking.install_fee, booking.taxes, booking.total, booking.payment_method, booking.payment_status,
+        booking.status, booking.delivery_eta, booking.exclude_install, created_at
+    )
+    
+    # Mark garage items as installed (best-effort)
+    update_placeholders = ", ".join([f"${i+2}" for i in range(len(payload.product_ids))])
+    update_query = f"UPDATE garage SET status = 'installed' WHERE user_id = $1 AND product_id IN ({update_placeholders})"
+    await db.execute(update_query, user["id"], *payload.product_ids)
+    
     return booking
 
-@api_router.put("/bookings/{booking_id}/cancel")
-async def cancel_booking(booking_id: str, request: Request):
-    user = await get_current_user(request)
-    booking = await db.bookings.find_one({"booking_id": booking_id, "user_id": user["user_id"]}, {"_id": 0})
-    if not booking:
+
+@api.get("/bookings")
+async def list_bookings(user=Depends(get_current_user)):
+    db = get_db()
+    items = await db.fetch("SELECT * FROM bookings WHERE user_id = $1 ORDER BY created_at DESC", user["id"])
+    return items
+
+
+@api.get("/bookings/{booking_id}")
+async def get_booking(booking_id: str, user=Depends(get_current_user)):
+    db = get_db()
+    b = await db.fetchrow("SELECT * FROM bookings WHERE id = $1 AND user_id = $2", booking_id, user["id"])
+    if not b:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if booking["status"] in ["in_workshop", "ready", "delivered", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Cannot cancel at this stage")
-    await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}})
-    await db.booking_slots.update_one({"slot_id": booking["slot_id"]}, {"$inc": {"booked_count": -1}})
-    return {"message": "Booking cancelled"}
+    return b
 
-# ========== CHANNEL ROUTES ==========
-@api_router.get("/channels")
-async def get_channels():
-    channels = await db.channels.find({}, {"_id": 0}).sort("member_count", -1).to_list(100)
-    return channels
 
-@api_router.post("/channels")
-async def create_channel(channel: ChannelCreate, request: Request):
-    user = await get_current_user(request)
-    slug = channel.name.lower().replace(" ", "-").replace("&", "and")
-    existing = await db.channels.find_one({"slug": slug})
-    if existing:
-        raise HTTPException(status_code=400, detail="Channel with this name already exists")
-    doc = {
-        "channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": channel.name, "slug": slug,
-        "description": channel.description, "created_by": user["user_id"],
-        "member_count": 1, "post_count": 0,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.channels.insert_one(doc)
-    return await db.channels.find_one({"channel_id": doc["channel_id"]}, {"_id": 0})
-
-@api_router.post("/channels/{channel_id}/join")
-async def join_channel(channel_id: str, request: Request):
-    user = await get_current_user(request)
-    existing = await db.channel_members.find_one({"channel_id": channel_id, "user_id": user["user_id"]})
-    if existing:
-        await db.channel_members.delete_one({"channel_id": channel_id, "user_id": user["user_id"]})
-        await db.channels.update_one({"channel_id": channel_id}, {"$inc": {"member_count": -1}})
-        return {"joined": False}
-    await db.channel_members.insert_one({"channel_id": channel_id, "user_id": user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-    await db.channels.update_one({"channel_id": channel_id}, {"$inc": {"member_count": 1}})
-    return {"joined": True}
-
-# ========== COMMUNITY ROUTES ==========
-@api_router.get("/posts")
-async def get_posts(skip: int = 0, limit: int = 20, channel: Optional[str] = None, sort_by: Optional[str] = "new"):
-    query = {"is_published": True}
-    if channel:
-        ch = await db.channels.find_one({"slug": channel})
-        if ch:
-            query["channel_id"] = ch["channel_id"]
-    sort_field = "created_at"
-    if sort_by == "top":
-        sort_field = "vote_count"
-    elif sort_by == "hot":
-        sort_field = "vote_count"
-    posts = await db.posts.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(limit).to_list(limit)
-    for post in posts:
-        user = await db.users.find_one({"user_id": post["user_id"]}, {"_id": 0})
-        post["author"] = {"name": user["name"], "picture": user.get("picture", ""), "user_id": user["user_id"]} if user else {"name": "Unknown", "picture": "", "user_id": ""}
-        if post.get("tagged_products"):
-            tagged = []
-            for pid in post["tagged_products"]:
-                p = await db.products.find_one({"product_id": pid}, {"_id": 0})
-                if p:
-                    tagged.append({"product_id": p["product_id"], "name": p["name"], "price": p["price"], "slug": p["slug"]})
-            post["tagged_product_details"] = tagged
-        if post.get("channel_id"):
-            ch = await db.channels.find_one({"channel_id": post["channel_id"]}, {"_id": 0})
-            post["channel"] = ch
+# ---- COMMUNITY: POSTS ------------------------------------------------------
+@api.get("/community/posts")
+async def list_posts(limit: int = 60):
+    db = get_db()
+    posts = await db.fetch("SELECT * FROM posts ORDER BY created_at DESC LIMIT $1", limit)
+    if not posts:
+        demo = [
+            {"id": "demo-1", "author_name": "NightOwl_Hatch", "title": "Starry Night build — under the bridge lights", "body": "Got the satin wrap and stage 1 tune done last weekend. She glows.", "image_url": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80", "car_model": "Hot Hatch", "tags": ["wrap", "hatchback", "night"], "likes": 248, "created_at": datetime.utcnow().isoformat()},
+            {"id": "demo-2", "author_name": "TrailDog_SUV", "title": "Offroad build after 800km of trails", "body": "Beadlocks holding up like champs. Roof rack + light bar = night runs unlocked.", "image_url": "https://images.unsplash.com/photo-1532009877282-3340270e0529?auto=format&fit=crop&w=1200&q=80", "car_model": "Offroad SUV", "tags": ["offroad", "suv"], "likes": 184, "created_at": datetime.utcnow().isoformat()},
+            {"id": "demo-3", "author_name": "ApexHunter", "title": "First trackday in the wrapped beast", "body": "Cold air intake makes the dump valve sing. Sub-2 min lap incoming.", "image_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=1200&q=80", "car_model": "Performance Hatch", "tags": ["track", "hatchback"], "likes": 162, "created_at": datetime.utcnow().isoformat()},
+            {"id": "demo-4", "author_name": "WheelGazer", "title": "New forged carbon-7s installed", "body": "Matte gunmetal. Honestly looks fake good in person.", "image_url": "https://images.unsplash.com/photo-1626668893632-6f3a4466d109?auto=format&fit=crop&w=1200&q=80", "car_model": "Coupe", "tags": ["wheels"], "likes": 311, "created_at": datetime.utcnow().isoformat()},
+            {"id": "demo-5", "author_name": "ShadowSyndicate", "title": "Matte stealth wrap + tint trio", "body": "Whole car disappears at night. 10/10.", "image_url": "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80", "car_model": "Performance Sedan", "tags": ["wrap", "stealth"], "likes": 142, "created_at": datetime.utcnow().isoformat()},
+            {"id": "demo-6", "author_name": "BeadlockBro", "title": "Trail tested, dust approved", "body": "Lonavala run was absolute fire. The SUV feels reborn.", "image_url": "https://images.unsplash.com/photo-1532974297617-c0f05fe48bff?auto=format&fit=crop&w=1200&q=80", "car_model": "4x4 SUV", "tags": ["offroad"], "likes": 89, "created_at": datetime.utcnow().isoformat()},
+        ]
+        return demo
     return posts
 
-@api_router.post("/posts")
-async def create_post(post: PostCreate, request: Request):
-    user = await get_current_user(request)
-    doc = {
-        "post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": user["user_id"],
-        "car_id": post.car_id, "caption": post.caption, "channel_id": post.channel_id,
-        "media_urls": post.media_urls, "tagged_products": post.tagged_products,
-        "likes_count": 0, "comments_count": 0,
-        "upvotes": 0, "downvotes": 0, "vote_count": 0,
-        "is_published": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.posts.insert_one(doc)
-    if post.channel_id:
-        await db.channels.update_one({"channel_id": post.channel_id}, {"$inc": {"post_count": 1}})
-    return await db.posts.find_one({"post_id": doc["post_id"]}, {"_id": 0})
 
-@api_router.post("/posts/{post_id}/vote")
-async def vote_post(post_id: str, vote: VoteCreate, request: Request):
-    user = await get_current_user(request)
-    if vote.vote not in ("up", "down"):
-        raise HTTPException(status_code=400, detail="Vote must be 'up' or 'down'")
-    existing = await db.post_votes.find_one({"post_id": post_id, "user_id": user["user_id"]})
-    if existing:
-        old_vote = existing["vote"]
-        if old_vote == vote.vote:
-            # Remove vote
-            await db.post_votes.delete_one({"post_id": post_id, "user_id": user["user_id"]})
-            inc = {"upvotes": -1, "vote_count": -1} if old_vote == "up" else {"downvotes": -1, "vote_count": 1}
-            await db.posts.update_one({"post_id": post_id}, {"$inc": inc})
-            return {"vote": None}
-        else:
-            # Change vote
-            await db.post_votes.update_one({"post_id": post_id, "user_id": user["user_id"]}, {"$set": {"vote": vote.vote}})
-            if vote.vote == "up":
-                await db.posts.update_one({"post_id": post_id}, {"$inc": {"upvotes": 1, "downvotes": -1, "vote_count": 2}})
-            else:
-                await db.posts.update_one({"post_id": post_id}, {"$inc": {"upvotes": -1, "downvotes": 1, "vote_count": -2}})
-            return {"vote": vote.vote}
-    else:
-        await db.post_votes.insert_one({"post_id": post_id, "user_id": user["user_id"], "vote": vote.vote, "created_at": datetime.now(timezone.utc).isoformat()})
-        inc = {"upvotes": 1, "vote_count": 1} if vote.vote == "up" else {"downvotes": 1, "vote_count": -1}
-        await db.posts.update_one({"post_id": post_id}, {"$inc": inc})
-        return {"vote": vote.vote}
-
-@api_router.post("/posts/{post_id}/save")
-async def save_post(post_id: str, request: Request):
-    user = await get_current_user(request)
-    existing = await db.saved_posts.find_one({"post_id": post_id, "user_id": user["user_id"]})
-    if existing:
-        await db.saved_posts.delete_one({"post_id": post_id, "user_id": user["user_id"]})
-        return {"saved": False}
-    await db.saved_posts.insert_one({"post_id": post_id, "user_id": user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-    return {"saved": True}
-
-@api_router.post("/posts/{post_id}/like")
-async def toggle_like(post_id: str, request: Request):
-    user = await get_current_user(request)
-    existing = await db.post_likes.find_one({"post_id": post_id, "user_id": user["user_id"]})
-    if existing:
-        await db.post_likes.delete_one({"post_id": post_id, "user_id": user["user_id"]})
-        await db.posts.update_one({"post_id": post_id}, {"$inc": {"likes_count": -1}})
-        return {"liked": False}
-    else:
-        await db.post_likes.insert_one({"post_id": post_id, "user_id": user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-        await db.posts.update_one({"post_id": post_id}, {"$inc": {"likes_count": 1}})
-        return {"liked": True}
-
-@api_router.get("/posts/{post_id}/comments")
-async def get_comments(post_id: str):
-    comments = await db.post_comments.find({"post_id": post_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
-    for c in comments:
-        u = await db.users.find_one({"user_id": c["user_id"]}, {"_id": 0})
-        c["author"] = {"name": u["name"], "picture": u.get("picture", "")} if u else {"name": "Unknown", "picture": ""}
-    return comments
-
-@api_router.post("/posts/{post_id}/comments")
-async def add_comment(post_id: str, comment: CommentCreate, request: Request):
-    user = await get_current_user(request)
-    doc = {
-        "comment_id": f"cmt_{uuid.uuid4().hex[:12]}", "post_id": post_id,
-        "user_id": user["user_id"], "content": comment.content,
-        "parent_comment_id": comment.parent_comment_id,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.post_comments.insert_one(doc)
-    await db.posts.update_one({"post_id": post_id}, {"$inc": {"comments_count": 1}})
-    return await db.post_comments.find_one({"comment_id": doc["comment_id"]}, {"_id": 0})
-
-# ========== ADMIN ROUTES ==========
-@api_router.post("/admin/init")
-async def admin_init(request: Request):
-    user = await get_current_user(request)
-    admin_count = await db.users.count_documents({"role": "admin"})
-    if admin_count > 0:
-        raise HTTPException(status_code=400, detail="Admin already exists")
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": "admin"}})
-    return {"message": "You are now admin"}
-
-@api_router.put("/admin/bookings/{booking_id}/status")
-async def update_booking_status(booking_id: str, body: StatusUpdate, request: Request):
-    user = await get_current_user(request)
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    valid = ["pending", "confirmed", "picked_up", "in_workshop", "ready", "delivered", "cancelled"]
-    if body.status not in valid:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid}")
-    result = await db.bookings.update_one(
-        {"booking_id": booking_id},
-        {"$set": {"status": body.status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+@api.post("/community/posts", response_model=Post)
+async def create_post(payload: PostCreate, user=Depends(get_current_user)):
+    db = get_db()
+    import uuid
+    post_id = str(uuid.uuid4())
+    created_at = datetime.utcnow().isoformat()
+    
+    post = Post(
+        id=post_id,
+        user_id=user["id"],
+        author_name=user.get("name") or user["email"].split("@")[0],
+        title=payload.title,
+        body=payload.body,
+        image_url=payload.image_url,
+        car_model=payload.car_model or user.get("car_model"),
+        tags=payload.tags,
+        likes=0,
+        created_at=created_at
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    return {"message": "Status updated"}
+    
+    await db.execute(
+        """
+        INSERT INTO posts (id, user_id, author_name, title, body, image_url, car_model, tags, likes, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        """,
+        post.id, post.user_id, post.author_name, post.title, post.body, post.image_url, post.car_model,
+        post.tags, post.likes, created_at
+    )
+    return post
 
-@api_router.post("/admin/slots")
-async def create_slot(slot: SlotCreate, request: Request):
-    user = await get_current_user(request)
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    doc = {
-        "slot_id": f"slot_{uuid.uuid4().hex[:12]}", "date": slot.date,
-        "start_time": slot.start_time, "end_time": slot.end_time,
-        "capacity": slot.capacity, "booked_count": 0, "is_available": True,
-        "created_by": user["user_id"]
-    }
-    await db.booking_slots.insert_one(doc)
-    return await db.booking_slots.find_one({"slot_id": doc["slot_id"]}, {"_id": 0})
 
-@api_router.get("/admin/bookings")
-async def admin_get_bookings(request: Request):
-    user = await get_current_user(request)
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
-    for b in bookings:
-        u = await db.users.find_one({"user_id": b["user_id"]}, {"_id": 0})
-        b["user_name"] = u["name"] if u else "Unknown"
-    return bookings
+@api.post("/community/posts/{post_id}/like")
+async def like_post(post_id: str, user=Depends(get_optional_user)):
+    db = get_db()
+    rc = await db.execute("UPDATE posts SET likes = likes + 1 WHERE id = $1", post_id)
+    if rc == 0:
+        return {"ok": True, "demo": True}
+    return {"ok": True}
 
-# ========== SEED DATA ==========
-IMG_RIM = "https://images.unsplash.com/photo-1745439988955-da4eee57918a?w=600&h=400&fit=crop"
-IMG_ENGINE = "https://images.unsplash.com/photo-1771623915340-d3c68845e400?w=600&h=400&fit=crop"
-IMG_CARBON = "https://images.unsplash.com/photo-1773502605492-5d5e8c0c17a2?w=600&h=400&fit=crop"
-IMG_CAR1 = "https://images.unsplash.com/photo-1774576320208-9914d1fc5be5?w=600&h=400&fit=crop"
-IMG_CAR2 = "https://images.unsplash.com/photo-1628273148878-b9ebaec15818?w=600&h=400&fit=crop"
-IMG_SPORTS = "https://images.pexels.com/photos/9139586/pexels-photo-9139586.jpeg?w=600&h=400&fit=crop"
-IMG_GARAGE = "https://images.unsplash.com/photo-1774088249014-b0d7d907ad16?w=600&h=400&fit=crop"
 
-SEED_PRODUCTS = [
-    {"name": "OZ Racing Ultraleggera HLT", "slug": "oz-racing-ultraleggera", "category": "rims", "brand": "OZ Racing", "price": 72000, "installation_cost": 5000, "description": "Forged aluminum alloy wheels with HLT technology. Ultra-lightweight construction for maximum performance.", "images": [IMG_RIM], "compatible_makes": []},
-    {"name": "Enkei RPF1 Competition", "slug": "enkei-rpf1", "category": "rims", "brand": "Enkei", "price": 55000, "installation_cost": 5000, "description": "MAT process forged wheels. Track-proven performance with aggressive concave design.", "images": [IMG_RIM], "compatible_makes": []},
-    {"name": "BBS Super RS Forged", "slug": "bbs-super-rs", "category": "rims", "brand": "BBS", "price": 95000, "installation_cost": 5000, "description": "Premium forged two-piece wheels with iconic mesh design. Motorsport heritage meets street luxury.", "images": [IMG_RIM], "compatible_makes": []},
-    {"name": "Akrapovic Slip-On Titanium", "slug": "akrapovic-titanium", "category": "exhaust", "brand": "Akrapovic", "price": 125000, "installation_cost": 12000, "description": "Full titanium construction with carbon fiber tips. Aggressive sound profile with 15% weight reduction.", "images": [IMG_ENGINE], "compatible_makes": ["BMW", "Mercedes", "Audi"]},
-    {"name": "Borla ATAK Cat-Back System", "slug": "borla-atak", "category": "exhaust", "brand": "Borla", "price": 68000, "installation_cost": 8000, "description": "Aggressive Thunder sound level. T-304 stainless steel with patented multi-core technology.", "images": [IMG_ENGINE], "compatible_makes": ["Honda", "Hyundai", "Maruti Suzuki"]},
-    {"name": "APR Carbon Fiber Wing", "slug": "apr-carbon-wing", "category": "spoiler", "brand": "APR Performance", "price": 45000, "installation_cost": 6000, "description": "GTC-200 adjustable wing with real carbon fiber construction. Wind tunnel tested for maximum downforce.", "images": [IMG_CAR1], "compatible_makes": []},
-    {"name": "Voltex GT Wing Type V", "slug": "voltex-gt-wing", "category": "spoiler", "brand": "Voltex", "price": 180000, "installation_cost": 15000, "description": "Japanese-made full carbon GT wing. Championship-proven aerodynamics with adjustable angle.", "images": [IMG_CAR1], "compatible_makes": ["Honda", "Toyota", "Maruti Suzuki"]},
-    {"name": "Morimoto XB LED Pro", "slug": "morimoto-xb-led", "category": "headlights", "brand": "Morimoto", "price": 42000, "installation_cost": 5000, "description": "Plug-and-play LED headlight upgrade. Sequential turn signals with DRL strip.", "images": [IMG_SPORTS], "compatible_makes": []},
-    {"name": "Oracle ColorSHIFT Halo Kit", "slug": "oracle-colorshift", "category": "headlights", "brand": "Oracle Lighting", "price": 28000, "installation_cost": 4000, "description": "RGB color-changing halo rings with Bluetooth control. Over 16 million colors.", "images": [IMG_SPORTS], "compatible_makes": []},
-    {"name": "KW Coilover V3 Kit", "slug": "kw-v3-coilover", "category": "suspension", "brand": "KW Suspensions", "price": 135000, "installation_cost": 18000, "description": "Triple-adjustable coilovers with separate rebound and compression damping. Track to street versatility.", "images": [IMG_CARBON], "compatible_makes": ["BMW", "Mercedes", "Audi", "Volkswagen"]},
-    {"name": "Bilstein B16 PSS10", "slug": "bilstein-b16", "category": "suspension", "brand": "Bilstein", "price": 98000, "installation_cost": 15000, "description": "10-stage adjustable damping with progressive rate springs. German engineering for precision handling.", "images": [IMG_CARBON], "compatible_makes": ["BMW", "Mercedes", "Honda"]},
-    {"name": "Sparco QRT-R Bucket Seat", "slug": "sparco-qrt-r", "category": "interior", "brand": "Sparco", "price": 85000, "installation_cost": 8000, "description": "FIA-approved carbon fiber racing seat. Alcantara upholstery with integrated head restraint.", "images": [IMG_CAR2], "compatible_makes": []},
-    {"name": "Seibon Carbon Fiber Hood", "slug": "seibon-cf-hood", "category": "hood", "brand": "Seibon", "price": 65000, "installation_cost": 8000, "description": "OEM-style carbon fiber hood with UV-resistant clear coat. 60% lighter than stock.", "images": [IMG_ENGINE], "compatible_makes": ["Honda", "Hyundai", "Maruti Suzuki", "Tata"]},
-    {"name": "3M 2080 Satin Black Full Wrap", "slug": "3m-satin-black", "category": "vinyl", "brand": "3M", "price": 45000, "installation_cost": 15000, "description": "Full body satin black wrap with Comply adhesive and Controltac technology. Self-healing properties.", "images": [IMG_CAR1], "compatible_makes": []},
-    {"name": "NRG Quick Release Hub Kit", "slug": "nrg-quick-release", "category": "interior", "brand": "NRG Innovations", "price": 12000, "installation_cost": 2000, "description": "Steering wheel quick release with SFI-rated ball locking mechanism. Anodized finish.", "images": [IMG_CAR2], "compatible_makes": []},
-]
+# ---- COMMUNITY: EVENTS / REVIEWS ------------------------------------------
+@api.get("/community/events")
+async def list_events():
+    db = get_db()
+    return await db.fetch("SELECT * FROM events ORDER BY date ASC")
 
-async def seed_database():
-    product_count = await db.products.count_documents({})
-    if product_count == 0:
-        logger.info("Seeding products...")
-        now = datetime.now(timezone.utc).isoformat()
-        for p in SEED_PRODUCTS:
-            p["product_id"] = f"prod_{uuid.uuid4().hex[:12]}"
-            p["in_stock"] = True
-            p["is_active"] = True
-            p["created_at"] = now
-        await db.products.insert_many(SEED_PRODUCTS)
-        logger.info(f"Seeded {len(SEED_PRODUCTS)} products")
 
-    slot_count = await db.booking_slots.count_documents({})
-    if slot_count == 0:
-        logger.info("Seeding booking slots...")
-        slots = []
-        for day_offset in range(1, 15):
-            d = (datetime.now(timezone.utc) + timedelta(days=day_offset)).strftime("%Y-%m-%d")
-            slots.append({"slot_id": f"slot_{uuid.uuid4().hex[:12]}", "date": d, "start_time": "09:00", "end_time": "13:00", "capacity": 5, "booked_count": 0, "is_available": True})
-            slots.append({"slot_id": f"slot_{uuid.uuid4().hex[:12]}", "date": d, "start_time": "14:00", "end_time": "18:00", "capacity": 5, "booked_count": 0, "is_available": True})
-        await db.booking_slots.insert_many(slots)
-        logger.info(f"Seeded {len(slots)} booking slots")
+@api.get("/community/reviews")
+async def list_reviews():
+    db = get_db()
+    return await db.fetch("SELECT * FROM reviews ORDER BY created_at DESC")
 
-    # Seed channels
-    channel_count = await db.channels.count_documents({})
-    if channel_count == 0:
-        channels = [
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Mahindra Thar Club", "slug": "mahindra-thar-club", "description": "All things Thar — lifts, bumpers, winches and trail stories.", "created_by": "system", "member_count": 342, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Toyota Supra Builds", "slug": "toyota-supra-builds", "description": "MK4 and MK5 Supra build diaries, dyno results and tuning tips.", "created_by": "system", "member_count": 518, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "BMW M Series", "slug": "bmw-m-series", "description": "M2, M3, M4 and beyond. Performance mods and track setups.", "created_by": "system", "member_count": 672, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "JDM Legends", "slug": "jdm-legends", "description": "Skyline, RX-7, NSX, EVO — the icons of Japanese performance.", "created_by": "system", "member_count": 891, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Mustang Nation", "slug": "mustang-nation", "description": "From classic 5.0 to modern GT500. American muscle at its finest.", "created_by": "system", "member_count": 423, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Off-Road Warriors", "slug": "off-road-warriors", "description": "Jeeps, trucks, 4x4s — mud, rocks and everything in between.", "created_by": "system", "member_count": 287, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Track Day Diaries", "slug": "track-day-diaries", "description": "Lap times, suspension setups, and aero data from the circuit.", "created_by": "system", "member_count": 156, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"channel_id": f"ch_{uuid.uuid4().hex[:12]}", "name": "Show and Shine", "slug": "show-and-shine", "description": "Detailing, wraps, paint correction — make it look as good as it drives.", "created_by": "system", "member_count": 734, "post_count": 0, "created_at": datetime.now(timezone.utc).isoformat()},
-        ]
-        await db.channels.insert_many(channels)
-        logger.info(f"Seeded {len(channels)} community channels")
 
-    # Seed community posts (from a system user)
-    post_count = await db.posts.count_documents({})
-    if post_count == 0:
-        system_user = await db.users.find_one({"email": "modgarage@system.com"}, {"_id": 0})
-        if not system_user:
-            system_user_id = f"user_{uuid.uuid4().hex[:12]}"
-            await db.users.insert_one({
-                "user_id": system_user_id, "email": "modgarage@system.com", "name": "ModGarage Official",
-                "picture": "", "phone": "", "role": "admin",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-        else:
-            system_user_id = system_user["user_id"]
+@api.post("/community/reviews", response_model=Review)
+async def create_review(payload: ReviewCreate, user=Depends(get_current_user)):
+    db = get_db()
+    import uuid
+    review_id = str(uuid.uuid4())
+    created_at = datetime.utcnow().isoformat()
+    
+    review = Review(
+        id=review_id,
+        user_id=user["id"],
+        author_name=user.get("name") or user["email"].split("@")[0],
+        target=payload.target,
+        rating=payload.rating,
+        title=payload.title,
+        body=payload.body,
+        created_at=created_at
+    )
+    
+    await db.execute(
+        """
+        INSERT INTO reviews (id, user_id, author_name, target, rating, title, body, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        """,
+        review.id, review.user_id, review.author_name, review.target, review.rating, review.title,
+        review.body, created_at
+    )
+    return review
 
-        all_channels = await db.channels.find({}, {"_id": 0}).to_list(10)
-        ch_map = {c["slug"]: c["channel_id"] for c in all_channels}
-        products = await db.products.find({}, {"_id": 0}).to_list(5)
-        tagged_ids = [p["product_id"] for p in products[:3]] if products else []
-        posts = [
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("show-and-shine"), "caption": "Fresh build complete! Full carbon aero kit with titanium exhaust. The sound is absolutely insane.", "media_urls": [IMG_CAR1], "tagged_products": tagged_ids[:2], "likes_count": 47, "comments_count": 12, "upvotes": 47, "downvotes": 3, "vote_count": 44, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("bmw-m-series"), "caption": "Weekend project turned masterpiece. KW V3 coilovers + BBS RS wheels. Sits perfect.", "media_urls": [IMG_CAR2], "tagged_products": tagged_ids[1:3] if len(tagged_ids) > 1 else [], "likes_count": 83, "comments_count": 24, "upvotes": 83, "downvotes": 5, "vote_count": 78, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("jdm-legends"), "caption": "Engine bay goals. Every bolt, every hose - perfection. Who else obsesses over the details?", "media_urls": [IMG_ENGINE], "tagged_products": tagged_ids[:1], "likes_count": 156, "comments_count": 38, "upvotes": 156, "downvotes": 8, "vote_count": 148, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"post_id": f"post_{uuid.uuid4().hex[:12]}", "user_id": system_user_id, "car_id": None, "channel_id": ch_map.get("track-day-diaries"), "caption": "Track day ready. Full suspension overhaul and aero package installed. Shaved 3 seconds off our lap time!", "media_urls": [IMG_GARAGE], "tagged_products": tagged_ids, "likes_count": 210, "comments_count": 52, "upvotes": 210, "downvotes": 12, "vote_count": 198, "is_published": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        ]
-        await db.posts.insert_many(posts)
-        for ch_id in set(p["channel_id"] for p in posts if p.get("channel_id")):
-            count = sum(1 for p in posts if p.get("channel_id") == ch_id)
-            await db.channels.update_one({"channel_id": ch_id}, {"$inc": {"post_count": count}})
-        logger.info("Seeded community posts with channels")
 
-@app.on_event("startup")
-async def startup():
-    await seed_database()
+# ---- CONTACT ---------------------------------------------------------------
+@api.post("/contact")
+async def contact_submit(payload: ContactIn):
+    db = get_db()
+    import uuid
+    doc_id = str(uuid.uuid4())
+    created_at = datetime.utcnow().isoformat()
+    await db.execute(
+        """
+        INSERT INTO contact_messages (id, name, email, phone, message, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """,
+        doc_id, payload.name, payload.email, payload.phone, payload.message, created_at
+    )
+    return {"ok": True, "id": doc_id}
 
-app.include_router(api_router)
+
+# ---- mount router + middleware --------------------------------------------
+app.include_router(api)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def on_startup():
+    init_db()
+    db = get_db()
+    await db.connect()
+    try:
+        await ensure_seed()
+        logger.info("Seed check complete")
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Seed failed: %s", e)
+
+
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def on_shutdown():
+    await close_db()
